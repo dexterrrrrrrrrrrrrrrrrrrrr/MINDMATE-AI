@@ -1,187 +1,116 @@
-Here’s a **clean, professional README.md** you can use for your **MindMate AI project** (good for GitHub, hackathons, and portfolios). I also tailored it based on the features you've built like voice AI, Firebase, Gemini, ElevenLabs, goals, etc.
-
----
-
 # 🧠 MindMate AI
 
-**MindMate** is an AI-powered mental wellness and productivity companion designed to provide **emotional support, goal tracking, and intelligent conversations** through text and voice. It helps users manage mental health, reflect on their emotions, and stay productive with personalized AI assistance.
+MindMate AI is an AI-powered mental wellness and productivity companion offering emotional support, goal tracking, AI journaling, and voice interactions through a conversational interface. It integrates text and voice AI to provide realistic, context-aware responses.
 
----
+## 🖥️ Deployment
 
-# 🌟 Features
-
-### 🤖 AI Chat Companion
-
-* Conversational AI for emotional support and guidance
-* Context-aware responses
-* Human-like conversations powered by AI models
-
-### 🎯 Goal Tracking
-
-* Create and track personal goals
-* Habit tracking and productivity insights
-* Visual analytics for progress
-
-### 📓 AI Journaling
-
-* Smart journaling assistant
-* AI reflections on journal entries
-* Emotional sentiment insights
-
-### 🔐 Authentication
-
-* Google Sign-In authentication
-* Secure user sessions
-
-### ☁️ Cloud Storage
-
-* Chat history stored securely
-* User data managed via Firebase
-
-### 🎨 Modern UI
-
-* ChatGPT-inspired interface
-* Responsive design (desktop + mobile)
-* Smooth animations and interactive components
-
----
-
-# 🏗️ Tech Stack
-
-### Frontend
-
-* **React**
-* **React Router**
-* **Framer Motion**
-* **Lucide Icons**
-* **CSS / Glassmorphism UI**
-
-### Backend / APIs
-
-* **Fire Base**
-* **OpenRouter AI**
-* **ElevenLabs Voice AI**
-
-### Cloud Services
-
-* **Firebase Authentication**
-* **Firebase Firestore**
-
-### Speech Technologies
-
-* **Web Speech API**
-* **Speech Recognition**
-
-### Deployment
-
-* **Vercel**
-
----
+- frontend deployed: <https://mindmate-ai-jade.vercel.app>
 
 
+- backend deployed: <https://mindmate-ai-api.onrender.com>
 
----
 
-# 🚀 Installation
+open api docs:
+- <https://mindmate-ai-api.onrender.com/docs>
 
-### 1️⃣ Clone the repository
+ or
 
+- <https://mindmate-ai-api.onrender.com/scalar_docs>
+
+## Github Repos
+
+- frontend: <https://github.com/sagnikisopasfasf/MINDMATE-AI>
+- backend: <https://github.com/Sonic7002/MINDMATE_AI_API>
+
+## 🌟 Features
+
+- 💬 Conversational AI chat with context-aware emotional support
+
+- 🎯 Goal tracking and habit monitoring
+
+- 📓 AI-assisted journaling with sentiment insights
+
+- 🔊 Text-to-speech voice responses
+
+- 🔐 Google authentication and secure cloud storage
+
+## 🏗 Tech Stack
+
+- Frontend: React, Framer Motion, Lucide Icons, CSS / Glassmorphism UI
+- Backend: FastAPI, Python 3.11, NVIDIA NIM (GPT OSS 120B), Gemini 2.5 Flash Lite, NVIDIA Magpie TTS
+- Cloud & Storage: Firebase Authentication, Firebase Firestore
+- Deployment: Vercel (frontend), Render (backend)
+
+## 🚀 Setup
+Frontend
 ```bash
 git clone https://github.com/yourusername/mindmate-ai.git
-cd mindmate-ai
-```
-
----
-
-### 2️⃣ Install dependencies
-
-```bash
+cd mindmate-ai/frontend
 npm install
-```
-
----
-
-### 3️⃣ Configure Environment Variables
-
-Create a **.env file**
-
-```
-VITE_GEMINI_API_KEY=your_gemini_key
-VITE_ELEVENLABS_API_KEY=your_elevenlabs_key
-VITE_FIREBASE_API_KEY=your_firebase_key
-```
-
----
-
-### 4️⃣ Run the project
-
-```bash
+cp .env.example .env
 npm run dev
 ```
+Backend
+```bash
+cd ../backend
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --reload
+```
 
----
+Access backend API docs: http://localhost:8000/docs
 
-# 📱 Usage
+## Vercel authentication deployment
 
-1. Login using **Google Authentication**
-2. Start chatting with **MindMate AI**
-3. Track **goals and habits**
-4. Reflect using **AI journaling**
+Google sign-in uses Firebase redirect authentication with a same-origin helper proxy. Keep the Vercel project root at this repository root so the root `vercel.json` is applied.
 
----
+Set these production values in Vercel:
 
-# 🧠 Problem It Solves
+```text
+VITE_APP_DOMAIN=mindmate-ai-jade.vercel.app
+VITE_FIREBASE_AUTH_DOMAIN=mind-mate-94675.firebaseapp.com
+```
 
-Many people struggle with **mental stress, loneliness, and lack of motivation** but hesitate to seek help due to stigma or accessibility issues.
+Firebase Authentication must list `mindmate-ai-jade.vercel.app` as an authorized domain. The Google OAuth client must include this exact redirect URI:
 
-MindMate provides:
+```text
+https://mindmate-ai-jade.vercel.app/__/auth/handler
+```
 
-* Instant emotional support
-* Self-reflection tools
-* Productivity and goal tracking
-* Private and judgment-free AI conversations
+After deployment, both `/__/auth/handler` and `/__/auth/iframe` on the Vercel domain should return HTTP 200 before testing Google sign-in.
 
----
 
-# 📊 Future Improvements
+## 📱 Usage
 
-* Emotion detection from voice
-* AI mood prediction
-* Therapist matching system
-* Community support groups
-* Wearable health integration
-* Voice Interaction
+- Login with Google Authentication
 
----
+- Chat with MindMate AI
 
-# 🤝 Contributing
+- Track goals and habits
 
-Contributions are welcome!
+- Use AI journaling for reflection
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Submit a pull request
+- Listen to voice responses
 
----
+## 📄 License
 
-# 📄 License
+**MIT License**
 
-This project is licensed under the **MIT License**.
+## 👨‍💻 Author
 
----
+**Srijan Kargupta** – Backend & AI
 
-# 👨‍💻 Author
 
-**Sagnik Pal**
+**Sagnik Pal** – Frontend, UI & Cloud
 
-AI Developer | Mental Health Tech Enthusiast
+## ❤️ Acknowledgements
 
----
+NVIDIA NIM & Riva
 
-# ❤️ Acknowledgements
+GEMINI AI API
 
-* Firebase
-* React Community
+Firebase
 
----
+React Community

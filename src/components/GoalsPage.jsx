@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import {
     Plus,
     CheckCircle,
@@ -16,30 +16,42 @@ import {
     Star,
 } from "lucide-react";
 import "../styles/GoalsPage.css";
-import { collection, addDoc, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import LOGO2 from "../assets/LOGO2.svg";
+import { AI_API_URL } from "../config";
 import { deleteDoc } from "firebase/firestore";
+import { buildModeAwareMessages } from "../utils/assistantRequest";
 
 
-const generateGoalSuggestions = async (category) => {
+const generateGoalSuggestions = async (category, assistantModeId) => {
+
+    const messages = buildModeAwareMessages({
+        modeId: assistantModeId,
+        messages: [
+            {
+                role: "user",
+                content: `Generate 3 small daily goals for ${category}`,
+            },
+        ],
+        taskInstruction: `This is a focused goal-planning request for the ${category} category. Return exactly three realistic, specific daily goals. Keep each goal brief and actionable.`,
+    });
 
     const response = await fetch(
-        "https://mindmate-ai-api.onrender.com/api/v1/",
+        AI_API_URL,
         {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify([
-                {
-                    role: "user",
-                    content: `Generate 3 small daily goals for ${category}`
-                }
-            ])
+            body: JSON.stringify(messages),
         }
     );
+
+    if (!response.ok) {
+        throw new Error(`Goal suggestions failed with ${response.status}`);
+    }
 
     const data = await response.json();
 
@@ -88,7 +100,7 @@ const pillars = [
     { title: "Create Custom", icon: <Plus size={20} />, tip: "A goal without a plan is just a wish. Craft it, chase it, and celebrate every step." },
 ];
 
-const GoalsPage = ({ floatingInputBar }) => {
+const GoalsPage = ({ assistantModeId = "therapy" }) => {
     const [goals, setGoals] = useState([]);
     const [showWizard, setShowWizard] = useState(false);
     const [newGoal, setNewGoal] = useState({
@@ -207,7 +219,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
         setTopicChat([{ from: "bot", text: intro }]);
 
         try {
-            const suggestions = await generateGoalSuggestions(pillar.title);
+            const suggestions = await generateGoalSuggestions(pillar.title, assistantModeId);
 
             if (suggestions) {
                 setTopicChat((prev) => [
@@ -236,27 +248,31 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
     const sendTopicMessage = async () => {
 
         const trimmed = topicInput.trim();
-        if (!trimmed) return;
+        if (!trimmed || !activeTopic || topicLoading) return;
 
-        setTopicChat((prev) => [...prev, { from: "user", text: trimmed }]);
+        const nextTopicChat = [...topicChat, { from: "user", text: trimmed }];
+        setTopicChat(nextTopicChat);
         setTopicInput("");
         setTopicLoading(true);
 
         try {
 
-            const messagesToSend = [
-                {
-                    role: "system",
-                    content: `You are an assistant helping with ${activeTopic} goals. Give short practical advice.`
-                },
-                {
-                    role: "user",
-                    content: trimmed
-                }
-            ];
+            const recentTopicMessages = nextTopicChat
+                .filter((message) => typeof message.text === "string" && message.text.trim())
+                .slice(-10)
+                .map((message) => ({
+                    role: message.from === "user" ? "user" : "model",
+                    content: message.text.trim(),
+                }));
+
+            const messagesToSend = buildModeAwareMessages({
+                modeId: assistantModeId,
+                messages: recentTopicMessages,
+                taskInstruction: `This conversation is specifically about ${activeTopic} goals. Give concise, practical guidance that helps the user choose or complete realistic next steps.`,
+            });
 
             const response = await fetch(
-                "https://mindmate-ai-api.onrender.com/api/v1/",
+                AI_API_URL,
                 {
                     method: "POST",
                     headers: {
@@ -265,6 +281,10 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                     body: JSON.stringify(messagesToSend),
                 }
             );
+
+            if (!response.ok) {
+                throw new Error(`Goal conversation failed with ${response.status}`);
+            }
 
             const data = await response.json();
 
@@ -282,9 +302,9 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                 ...prev,
                 { from: "bot", text: "Failed to respond." }
             ]);
+        } finally {
+            setTopicLoading(false);
         }
-
-        setTopicLoading(false);
     };
 
     // handle Enter to send in topic mode
@@ -306,19 +326,10 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
             {/* HEADER */}
             <header className="section header-section">
                 <h2 className="page-title">
-                    <Flame className="inline mr-2 h-6 w-6" style={{ fill: "url(#flame-gradient)" }} />
-                    <svg width="6" height="6">
-                        <defs>
-                            <linearGradient id="flame-gradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#FFD700" />
-                                <stop offset="50%" stopColor="#FF8C00" />
-                                <stop offset="100%" stopColor="#FF0000" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
+                    <Flame size={22} strokeWidth={1.7} aria-hidden="true" />
                     Goals
                 </h2>
-                <motion.p
+                <Motion.p
                     key={dailyQuote}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -326,14 +337,14 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                     className="daily-quote"
                 >
                     {dailyQuote}
-                </motion.p>
+                </Motion.p>
             </header>
 
             {/* PILLARS */}
             <section className="section pillars-section">
                 <div className="pillar-grid">
                     {pillars.map((p) => (
-                        <motion.div
+                        <Motion.div
                             whileHover={{ scale: 1.05 }}
                             key={p.title}
                             className="pillar-card"
@@ -354,7 +365,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                                     {challenges[p.title][Math.floor(Math.random() * challenges[p.title].length)]}
                                 </p>
                             )}
-                        </motion.div>
+                        </Motion.div>
                     ))}
                 </div>
             </section>
@@ -398,7 +409,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                                 width="20"
                                 height="20"
                                 fill="white"
-                                xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                                xmlns="http://www.w3.org/2000/svg"
                             >
                                 <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
                             </svg>
@@ -413,7 +424,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                     <h2 className="text-2xl font-bold mb-6">Your Goals</h2>
                     <div className="pillar-grid">
                         {goals.map((goal) => (
-                            <motion.div key={goal.id} whileHover={{ scale: 1.05 }} className="pillar-card">
+                            <Motion.div key={goal.id} whileHover={{ scale: 1.05 }} className="pillar-card">
                                 <div className="pillar-icon">
                                     <Flame className="h-6 w-6 text-transparent bg-gradient-to-b from-yellow-400 via-orange-500 to-red-600 bg-clip-text" />
                                 </div>
@@ -425,7 +436,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                                 >
                                     ✖ Remove
                                 </button>
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </div>
                 </section>
@@ -435,7 +446,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
             <section className="section list-section">
                 <div className="goals-list">
                     {goals.map((goal) => (
-                        <motion.div key={goal.id} whileHover={{ scale: 1.02 }} className="goal-card">
+                        <Motion.div key={goal.id} whileHover={{ scale: 1.02 }} className="goal-card">
                             <div className="goal-info">
                                 <h3>{goal.title}</h3>
                                 <p>{goal.category} • {goal.frequency}</p>
@@ -466,7 +477,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                                     className="icon check"
                                 />
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     ))}
 
                 </div>
@@ -474,7 +485,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
 
             {/* CUSTOM GOAL MODAL */}
             {showWizard && (
-                <div className="modal-overlay">
+                <div className="goals-modal-overlay">
                     <div className="goal-modal">
                         <h2>Create a Custom Goal</h2>
                         <input
@@ -491,16 +502,16 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                             <option>Weekly</option>
                             <option>Monthly</option>
                         </select>
-                        <div className="modal-actions">
+                        <div className="goals-modal-actions">
                             <button
                                 onClick={() => setShowWizard(false)}
-                                className="cancel-btn"
+                                className="goal-modal__cancel"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={addGoal}
-                                className="save-btn"
+                                className="goal-modal__save"
                             >
                                 Save Goal
                             </button>

@@ -2,18 +2,12 @@
 import {
   SmilePlus,
   NotebookPen,
-  Activity,
   Target,
-  UserRoundSearch,
-  NotepadText,
-  Stethoscope,
-  SquarePen,
-  ClockFading
 } from "lucide-react";
 import LOGO2 from "../assets/LOGO2.svg";
 import "../styles/App.css";
 import { useNavigate } from "react-router-dom";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 export default function Sidebar({
   chatTitles = [],
   onNewChat,
@@ -21,31 +15,47 @@ export default function Sidebar({
   activeChatId,
   onDeleteChat,
   searchTerm,
-  setSearchTerm,
   onToggleSidebar,
   collapsed,
   onToggleCollapse,
   sidebarOpen,
   onOpenMoodTracker,
   goToPremium,
-  mode,
-  setMode,
   onOpenSearch
 }) {
-  const [deleteVisibleForId, setDeleteVisibleForId] = useState(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
-  const [anim, setAnim] = useState("fade-in");
-  const timerRef = useRef(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [anim] = useState("fade-in");
   const navigate = useNavigate();
   const [menuOpenForId, setMenuOpenForId] = useState(null);
-  const [showCopyToast, setShowCopyToast] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ top: 360, left: 150 });
+  const [toast, setToast] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const deleteDialogRef = useRef(null);
+  const deleteCancelRef = useRef(null);
+  const deleteInFlightRef = useRef(false);
+  const newChatButtonRef = useRef(null);
+  const optionsButtonRefs = useRef(new Map());
+  const deleteReturnFocusRef = useRef(null);
+  const toastTimeoutRef = useRef(null);
+  const [hasCoarsePointer, setHasCoarsePointer] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(hover: none), (pointer: coarse)").matches
+      : false
+  );
+
   const handleOverlayClick = (e) => {
-    if (e.target.classList.contains("sidebar-overlay")) {
-      onToggleSidebar();
-    }
+    if (e.target !== e.currentTarget || !sidebarOpen) return;
+
+    setMenuOpenForId(null);
+    onToggleSidebar();
   };
+  const showToast = (message, tone = "neutral") => {
+    window.clearTimeout(toastTimeoutRef.current);
+    setToast({ message, tone });
+    toastTimeoutRef.current = window.setTimeout(() => setToast(null), 2600);
+  };
+
   const handleShareChat = async (chatId) => {
 
     const shareLink = `${window.location.origin}/chat/${chatId}`;
@@ -53,46 +63,177 @@ export default function Sidebar({
     try {
       await navigator.clipboard.writeText(shareLink);
 
-      setShowCopyToast(true);
-
-      setTimeout(() => {
-        setShowCopyToast(false);
-      }, 2500);
+      showToast("Link copied.", "success");
 
     } catch (err) {
       console.error("Copy failed", err);
+      showToast("Could not copy the link.", "error");
     }
 
     setMenuOpenForId(null);
   };
   useEffect(() => {
+    const pointerQuery = window.matchMedia("(hover: none), (pointer: coarse)");
+    const updatePointerType = () => setHasCoarsePointer(pointerQuery.matches);
+
+    updatePointerType();
+    pointerQuery.addEventListener?.("change", updatePointerType);
+
+    return () => pointerQuery.removeEventListener?.("change", updatePointerType);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(toastTimeoutRef.current), []);
+
+  useEffect(() => {
+    if (!chatToDelete) return undefined;
+
+    const previouslyFocused = deleteReturnFocusRef.current;
+    const fallbackFocusTarget = newChatButtonRef.current;
+    const previousBodyOverflow = document.body.style.overflow;
+    const focusFrame = window.requestAnimationFrame(() => deleteCancelRef.current?.focus());
+
+    document.body.style.overflow = "hidden";
+
+    const handleDialogKeyDown = (event) => {
+      if (event.key === "Escape") {
+        if (!deleteInFlightRef.current) {
+          setDeleteError("");
+          setChatToDelete(null);
+        }
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        deleteDialogRef.current?.querySelectorAll("button:not([disabled])") || []
+      );
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleDialogKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+
+      window.requestAnimationFrame(() => {
+        if (previouslyFocused?.isConnected) previouslyFocused.focus();
+        else if (fallbackFocusTarget?.isConnected) fallbackFocusTarget.focus();
+      });
+    };
+  }, [chatToDelete]);
+
+  useEffect(() => {
+    if (menuOpenForId === null) return undefined;
+
     const closeMenu = () => setMenuOpenForId(null);
+    const closeMenuOnEscape = (event) => {
+      if (event.key === "Escape") closeMenu();
+    };
 
-    if (menuOpenForId !== null) {
-      window.addEventListener("click", closeMenu);
-    }
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("keydown", closeMenuOnEscape);
 
-    return () => window.removeEventListener("click", closeMenu);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("keydown", closeMenuOnEscape);
+    };
   }, [menuOpenForId]);
 
-  const handleTouchStart = (chatId) => {
-    timerRef.current = setTimeout(() => {
-      setDeleteVisibleForId(chatId);
-    }, 700);
+  const handleChatMenuToggle = (event, chatId) => {
+    event.stopPropagation();
+
+    if (menuOpenForId === chatId) {
+      setMenuOpenForId(null);
+      return;
+    }
+
+    const triggerRect = event.currentTarget.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    const dropdownWidth = 220;
+    const dropdownHeight = 96;
+    const viewportMargin = 8;
+    const triggerGap = 6;
+    const maxLeft = Math.max(viewportMargin, viewportWidth - dropdownWidth - viewportMargin);
+    const preferredLeft = triggerRect.right - dropdownWidth;
+    const left = Math.min(Math.max(preferredLeft, viewportMargin), maxLeft);
+    const belowTop = triggerRect.bottom + triggerGap;
+    const aboveTop = triggerRect.top - dropdownHeight - triggerGap;
+    const top = belowTop + dropdownHeight <= viewportHeight - viewportMargin
+      ? belowTop
+      : Math.max(viewportMargin, aboveTop);
+
+    setMenuPosition({ top: Math.round(top), left: Math.round(left) });
+    setMenuOpenForId(chatId);
   };
 
-  const handleTouchEnd = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
+  const handleNewChatClick = () => {
+    onNewChat();
+
+    if (sidebarOpen && window.matchMedia("(max-width: 768px)").matches) {
+      onToggleSidebar();
+    }
+  };
+
+  const requestChatDelete = (chat) => {
+    deleteReturnFocusRef.current = optionsButtonRefs.current.get(chat.id) || null;
+    setDeleteError("");
+    setChatToDelete({
+      id: chat.id,
+      title: chat.title?.trim() || "Untitled chat",
+    });
+    setMenuOpenForId(null);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleteInFlightRef.current) return;
+    setDeleteError("");
+    setChatToDelete(null);
+  };
+
+  const confirmChatDelete = async () => {
+    if (!chatToDelete || deleteInFlightRef.current) return;
+
+    deleteInFlightRef.current = true;
+    setIsDeleting(true);
+    setDeleteError("");
+
+    try {
+      const deleted = await onDeleteChat(chatToDelete.id);
+      if (deleted === false) throw new Error("Delete was not completed");
+
+      const deletedTitle = chatToDelete.title;
+      setChatToDelete(null);
+      showToast(`${deletedTitle} deleted.`, "neutral");
+    } catch (error) {
+      console.error("Chat deletion failed:", error);
+      setDeleteError("This chat could not be deleted. Nothing was removed. Please try again.");
+    } finally {
+      deleteInFlightRef.current = false;
+      setIsDeleting(false);
     }
   };
 
   const handleChatClick = (chatId) => {
     setMenuOpenForId(null); // close menu
-
-    if (deleteVisibleForId && deleteVisibleForId !== chatId) {
-      setDeleteVisibleForId(null);
-    }
 
     onSelectChat(chatId);
   };
@@ -105,9 +246,9 @@ export default function Sidebar({
   return (
     <>
 
-      {showCopyToast && (
-        <div className="copy-toast">
-          Link copied!
+      {toast && (
+        <div className={`sidebar-toast ${toast.tone}`} role="status" aria-live="polite">
+          {toast.message}
         </div>
       )}
 
@@ -161,32 +302,9 @@ export default function Sidebar({
         {/* ---------- MIDDLE SECTION ---------- */}
         <div className={`sidebar-middle ${anim}`}>
 
-          {/* Slide Toggle - hidden if collapsed */}
-          {/* {!collapsed && (
-            <div className="slide-toggle">
-              <div className={`slider ${mode}`}></div>
-
-              <div
-                className="toggle-option"
-                onClick={() => switchMode("therapy")}
-              >
-                <Activity size={18} />
-                <span>Therapy</span>
-              </div>
-
-              <div
-                className="toggle-option"
-                onClick={() => switchMode("doctor")}
-              >
-                {/* Medical Cross *
-                <Stethoscope size={18}/>
-                <span>Doctor</span>
-              </div>
-            </div>
-          )} */}
-
           <button
-            onClick={onNewChat}
+            ref={newChatButtonRef}
+            onClick={handleNewChatClick}
             className="new-chat-btn"
 
             style={{
@@ -233,66 +351,23 @@ export default function Sidebar({
             {!collapsed && <span>New Chat</span>}
           </button>
 
-          {/* ---------- MODE BASED FEATURES ---------- */}
-          {mode === "therapy" ? (
-            <>
-              <div className="feature-btn" onClick={onOpenMoodTracker}>
-                <SmilePlus size={18} />
-                {!collapsed && <span>Mood</span>}
-              </div>
+          <button type="button" className="feature-btn" onClick={onOpenMoodTracker}>
+            <SmilePlus size={18} />
+            {!collapsed && <span>Mood</span>}
+          </button>
 
-              <div
-                className="feature-btn"
-                onClick={() => navigate("/journals")}
-              >
-                <NotebookPen size={18} />
-                {!collapsed && <span>Journaling</span>}
-              </div>
+          <button type="button" className="feature-btn" onClick={() => navigate("/journals")}>
+            <NotebookPen size={18} />
+            {!collapsed && <span>Journaling</span>}
+          </button>
 
-              <div className="feature-btn" onClick={() => navigate("/goals")}>
-                <Target size={18} />
-                {!collapsed && <span>Goals</span>}
-              </div>
+          <button type="button" className="feature-btn" onClick={() => navigate("/goals")}>
+            <Target size={18} />
+            {!collapsed && <span>Goals</span>}
+          </button>
 
-
-            </>
-          ) : (
-            <>
-              <div
-                className="feature-btn"
-                onClick={() => navigate("/medical-summary")}
-              >
-                <NotepadText size={18} />
-                {!collapsed && <span>Dashboard</span>}
-              </div>
-
-              <div
-                className="feature-btn"
-                onClick={() => navigate("/nearby-doctors")}
-              >
-                <UserRoundSearch size={18} />
-                {!collapsed && <span>Nearby Doctors</span>}
-              </div>
-
-              <div
-                className="feature-btn"
-                onClick={() => navigate("/appointments")}
-              >
-                <ClockFading size={18} />
-                {!collapsed && <span>Appointments</span>}
-              </div>
-
-              <div
-                className="feature-btn"
-                onClick={() => navigate("/health-reports")}
-              >
-                <SquarePen size={18} />
-                {!collapsed && <span>Health Reports</span>}
-              </div>
-            </>
-          )}
-
-          <div
+          <button
+            type="button"
             className={`search-container ${collapsed ? "collapsed" : ""}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -319,7 +394,7 @@ export default function Sidebar({
               </span>
             )}
 
-          </div>
+          </button>
         </div>
 
         {/* ---------- BOTTOM SECTION ---------- */}
@@ -360,26 +435,35 @@ export default function Sidebar({
             filteredChats.map((chat) => (
               <li
                 key={chat.id}
-                onClick={() => handleChatClick(chat.id)}
                 className={
                   chat.id === activeChatId ? "active clickable" : "clickable"
                 }
-                title={chat.title}
-                onTouchStart={() => handleTouchStart(chat.id)}
-                onTouchEnd={handleTouchEnd}
-                onTouchMove={handleTouchEnd}
               >
-                <span className="chat-title">
-                  {chat.title || "Untitled Chat"}
-                  <span className="dot-after-title">.</span>
-                </span>
+                <button
+                  type="button"
+                  className="chat-select-btn"
+                  onClick={() => handleChatClick(chat.id)}
+                  title={chat.title || "Untitled Chat"}
+                  aria-current={chat.id === activeChatId ? "page" : undefined}
+                >
+                  <span className="chat-title">
+                    {chat.title || "Untitled Chat"}
+                    <span className="dot-after-title">.</span>
+                  </span>
+                </button>
 
                 <button
-                  className="chat-options-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpenForId(menuOpenForId === chat.id ? null : chat.id);
+                  ref={(node) => {
+                    if (node) optionsButtonRefs.current.set(chat.id, node);
+                    else optionsButtonRefs.current.delete(chat.id);
                   }}
+                  type="button"
+                  className="chat-options-btn"
+                  aria-label={`More options for ${chat.title || "Untitled Chat"}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpenForId === chat.id}
+                  style={hasCoarsePointer || menuOpenForId === chat.id ? { opacity: 1 } : undefined}
+                  onClick={(event) => handleChatMenuToggle(event, chat.id)}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="5" cy="12" r="2" />
@@ -390,10 +474,14 @@ export default function Sidebar({
                 {menuOpenForId === chat.id && (
                   <div
                     className="chat-dropdown"
+                    role="menu"
                     style={{ top: menuPosition.top, left: menuPosition.left }}
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <button
+                      type="button"
                       className="dropdown-item"
+                      role="menuitem"
                       onClick={() => handleShareChat(chat.id)}
                     >
                       <svg
@@ -418,12 +506,10 @@ export default function Sidebar({
 
 
                     <button
+                      type="button"
                       className="dropdown-item delete"
-                      onClick={() => {
-                        setChatToDelete(chat.id);
-                        setShowDeleteModal(true);
-                        setMenuOpenForId(null);
-                      }}
+                      role="menuitem"
+                      onClick={() => requestChatDelete(chat)}
                     >
                       <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
                       Delete
@@ -436,43 +522,59 @@ export default function Sidebar({
         </ul>
       </div>
 
-      {showDeleteModal && (
-        <div className="modal-over" onClick={() => setShowDeleteModal(false)}>
+      {chatToDelete && (
+        <div
+          className="chat-delete-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeDeleteDialog();
+          }}
+        >
           <div
-            className="modal-cont"
-            onClick={(e) => e.stopPropagation()}
+            ref={deleteDialogRef}
+            className="chat-delete-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-busy={isDeleting}
+            aria-labelledby="chat-delete-title"
+            aria-describedby="chat-delete-description"
           >
             <button
-              className="close-btn"
-              onClick={() => setShowDeleteModal(false)}
+              type="button"
+              className="chat-delete-dialog__close"
+              onClick={closeDeleteDialog}
+              disabled={isDeleting}
+              aria-label="Close delete confirmation"
             >
               &times;
             </button>
 
-            <h2>Confirm Delete</h2>
-            <p>
-              Are you sure you want to delete{" "}
-              {chatTitles.find((c) => c.id === chatToDelete)?.title ||
-                "this chat"}
-              ?
+            <div className="chat-delete-dialog__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
+            </div>
+            <h2 id="chat-delete-title">Delete this chat?</h2>
+            <p id="chat-delete-description">
+              <strong>{chatToDelete.title}</strong> will be permanently removed. This cannot be undone.
             </p>
+            {deleteError && <p className="chat-delete-dialog__error" role="alert">{deleteError}</p>}
 
-            <div className="modal-actions">
+            <div className="chat-delete-dialog__actions">
               <button
-                className="cancel-btn"
-                onClick={() => setShowDeleteModal(false)}
+                ref={deleteCancelRef}
+                type="button"
+                className="chat-delete-dialog__cancel"
+                onClick={closeDeleteDialog}
+                disabled={isDeleting}
               >
-                Cancel
+                Keep chat
               </button>
               <button
-                className="delete-b"
-                onClick={() => {
-                  if (chatToDelete) onDeleteChat(chatToDelete);
-                  setChatToDelete(null);
-                  setShowDeleteModal(false);
-                }}
+                type="button"
+                className="chat-delete-dialog__confirm"
+                onClick={confirmChatDelete}
+                disabled={isDeleting}
               >
-                Delete
+                {isDeleting ? "Deleting..." : "Delete chat"}
               </button>
             </div>
           </div>

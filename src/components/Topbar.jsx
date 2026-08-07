@@ -1,11 +1,13 @@
-import { Menu, Settings, UserPen, LifeBuoy, LogOut, Star } from 'lucide-react';
+import { Menu, Settings, LogOut, Star } from "lucide-react";
 import LOGO2 from "../assets/LOGO2.svg";
 import "../styles/App.css";
 import { useState, useRef, useEffect } from "react";
 
-const Topbar = ({ user, onLogout, onToggleSidebar, sidebarOpen, goToPremium, onOpenSettings, onLoginClick }) => {
+const Topbar = ({ user, onLogout, goToPremium, onOpenSettings, onLoginClick, onToggleSidebar }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const menuRef = useRef();
+  const avatarButtonRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -17,33 +19,48 @@ const Topbar = ({ user, onLogout, onToggleSidebar, sidebarOpen, goToPremium, onO
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const getAvatar = () => {
-    if (user?.photoURL) return user.photoURL;
-    if (user?.displayName) {
-      const initials = user.displayName
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase();
-      return `https://via.placeholder.com/40?text=${initials}`;
-    }
-    return "https://via.placeholder.com/40?text=U";
-  };
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [user?.photoURL]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      avatarButtonRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [menuOpen]);
+
+  const initials = (user?.displayName || user?.email || "User")
+    .split(/[\s@]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 
   return (
-    <div className="topbar flex items-center justify-between px-4 py-2 bg-gradient-to-r from-purple-700 via-pink-600 to-red-500 shadow-lg">
+    <header className="topbar">
+
+      <button type="button" className="topbar-menu-button" onClick={onToggleSidebar} aria-label="Open navigation">
+        <Menu size={21} />
+      </button>
 
       {/* Center: Logo */}
-      <div className="brand-logo flex items-center gap-2 justify-center w-full">
-        {/* Logo hidden on mobile */}
+      <div className="brand-logo">
         <img
           src={LOGO2}
           alt="Logo"
-          className="logo-icon h-8 w-auto hidden md:block" // only visible on md and up
+          className="logo-icon"
         />
 
         {/* Brand title always visible */}
-        <h2 className="brand-title text-white font-bold text-lg">MindMate</h2>
+        <h2 className="brand-title">MindMate</h2>
       </div>
 
 
@@ -51,79 +68,87 @@ const Topbar = ({ user, onLogout, onToggleSidebar, sidebarOpen, goToPremium, onO
 
       {/* Right: User Menu or Guest Buttons */}
       {user ? (
-        <div className="profile-container relative" ref={menuRef}>
-          <img
-            src={getAvatar()}
-            alt={user.displayName || "User"}
-            className="profile-avatar w-10 h-10 rounded-full cursor-pointer border-2 border-white"
-            onClick={() => setMenuOpen(prev => !prev)}
-          />
+        <div className="profile-container" ref={menuRef}>
+          <button
+            ref={avatarButtonRef}
+            type="button"
+            className="profile-avatar-button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label={menuOpen ? "Close account menu" : "Open account menu"}
+            aria-expanded={menuOpen}
+            aria-controls="mindmate-account-menu"
+          >
+            {user.photoURL && !avatarLoadFailed ? (
+              <img
+                src={user.photoURL}
+                alt=""
+                className="profile-avatar"
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarLoadFailed(true)}
+              />
+            ) : (
+              <span className="profile-initials" aria-hidden="true">{initials}</span>
+            )}
+          </button>
 
           {menuOpen && (
-            <div className="profile-menu absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg text-white z-50">
+            <div id="mindmate-account-menu" className="profile-menu" role="group" aria-label="Account actions">
               <button
-                className="menu-header flex items-center px-4 py-2 w-full text-white hover:bg-gray-700"
+                type="button"
+                className="menu-header"
                 onClick={() => {
                   setMenuOpen(false);
                   goToPremium();
                 }}
               >
-                <Star size={18} className="mr-2 text-white" />
+                <Star size={18} />
                 MindMate Pro
               </button>
 
-              <hr style={{ margin: "5px 0", borderColor: 'rgba(255,255,255,0.2)' }} />
-
-              {/* <button className="menu-item flex items-center px-4 py-2 w-full text-white hover:bg-gray-700">
-                <UserPen size={18} className="mr-2 text-white" />
-                Profile
-              </button> */}
+              <hr className="profile-menu__divider" />
 
               <button
-                className="menu-item flex items-center px-4 py-2 w-full text-white hover:bg-gray-700"
+                type="button"
+                className="menu-item"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpenSettings();
                 }}
               >
-                <Settings size={18} className="mr-2 text-white" />
+                <Settings size={18} />
                 Settings
               </button>
 
-              {/* <button className="menu-item flex items-center px-4 py-2 w-full text-white hover:bg-gray-700">
-                <LifeBuoy size={18} className="mr-2 text-white" />
-                Help
-              </button> */}
-
-              <hr style={{ margin: "5px 0", borderColor: 'rgba(255,255,255,0.2)' }} />
+              <hr className="profile-menu__divider" />
 
               <button
-                className="menu-item flex items-center px-4 py-2 w-full text-white hover:bg-gray-700"
+                type="button"
+                className="menu-item profile-menu__danger"
                 onClick={onLogout}
               >
-                <LogOut size={18} className="mr-2 text-white" />
+                <LogOut size={18} />
                 Logout
               </button>
             </div>
           )}
         </div>
       ) : (
-        <div className="guest-buttons flex gap-2">
+        <div className="guest-buttons">
           <button
-            className="px-4 py-1 rounded-md bg-white text-purple-700 font-semibold hover:bg-gray-100"
+            type="button"
             onClick={onLoginClick}
           >
             Login
           </button>
           <button
-            className="px-4 py-1 rounded-md bg-white text-purple-700 font-semibold hover:bg-gray-100"
+            type="button"
             onClick={onLoginClick}
           >
             Sign Up
           </button>
         </div>
       )}
-    </div>
+    </header>
   );
 };
 

@@ -1,0 +1,129 @@
+.assistant-mode-switcher {
+  --assistant-mode-count: 4;
+  --assistant-mode-index: 0;
+  width: min(100%, 430px);
+  min-width: 0;
+  padding: 4px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--assistant-mode-count), minmax(0, 1fr));
+  isolation: isolate;
+  color: #e9e9ed;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(26, 27, 31, 0.9), rgba(13, 14, 17, 0.94));
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -1px rgba(0, 0, 0, 0.28),
+    0 12px 30px rgba(0, 0, 0, 0.24);
+}
+
+.assistant-mode-switcher__selection {
+  width: calc((100% - 8px) / var(--assistant-mode-count));
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  z-index: 0;
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(64, 65, 72, 0.86), rgba(37, 38, 44, 0.9));
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.085),
+    0 7px 18px rgba(0, 0, 0, 0.26);
+  transform: translate3d(calc(var(--assistant-mode-index) * 100%), 0, 0);
+  transition: transform 220ms cubic-bezier(.2, .8, .25, 1);
+  pointer-events: none;
+}
+
+.assistant-mode-switcher__option {
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 9px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: rgba(205, 207, 214, 0.62);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.assistant-mode-switcher__option span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-mode-switcher__option.is-selected {
+  color: rgba(250, 250, 252, 0.96);
+}
+
+.assistant-mode-switcher__option:focus-visible {
+  outline: 2px solid rgba(181, 166, 255, 0.78);
+  outline-offset: -1px;
+}
+
+.assistant-mode-switcher__option:disabled {
+  color: rgba(175, 177, 184, 0.28);
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .assistant-mode-switcher__option:not(.is-selected, :disabled):hover {
+    color: rgba(231, 232, 236, 0.82);
+    transform: translateY(-1px);
+  }
+}
+
+@media (max-width: 480px) {
+  .assistant-mode-switcher {
+    width: 100%;
+    border-radius: 13px;
+  }
+
+  .assistant-mode-switcher__selection,
+  .assistant-mode-switcher__option {
+    border-radius: 9px;
+  }
+
+  .assistant-mode-switcher__option {
+    min-height: 42px;
+    padding-inline: 5px;
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-mode-switcher__selection,
+  .assistant-mode-switcher__option {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .assistant-mode-switcher,
+  .assistant-mode-switcher__selection {
+    border: 1px solid CanvasText;
+  }
+
+  .assistant-mode-switcher__option.is-selected {
+    color: HighlightText;
+  }
+
+  .assistant-mode-switcher__selection {
+    background: Highlight;
+  }
+}

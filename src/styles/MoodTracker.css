@@ -1,0 +1,375 @@
+.mood-checkin {
+  width: 100%;
+  min-height: 100%;
+  padding: clamp(82px, 10vh, 104px) 20px 150px;
+  overflow-y: auto;
+  color: #f3f3f5;
+  scrollbar-width: thin;
+}
+
+.mood-checkin__shell {
+  width: min(620px, 100%);
+  margin: 0 auto;
+}
+
+.mood-checkin__header {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  color: #d8d8dd;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.mood-checkin__back {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: #b8b8c0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.mood-checkin__back:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mood-checkin__privacy-state {
+  color: #707078;
+  font-size: 10px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.mood-checkin__intro {
+  margin: 34px 0 26px;
+}
+
+.mood-checkin__intro h1 {
+  margin: 0;
+  color: #f6f6f7;
+  font-size: clamp(28px, 4vw, 35px);
+  font-weight: 620;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.mood-checkin__intro p {
+  margin: 10px 0 0;
+  color: #8d8d95;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.mood-options,
+.mood-intensity-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mood-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mood-visually-hidden,
+.mood-option input,
+.mood-intensity input {
+  width: 1px;
+  height: 1px;
+  position: absolute;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mood-option {
+  min-height: 66px;
+  padding: 11px 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: #e9e9ec;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.mood-option:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mood-option:has(input:focus-visible) {
+  outline: 2px solid rgba(181, 166, 255, 0.78);
+  outline-offset: 2px;
+}
+
+.mood-option.is-selected {
+  border-color: rgba(181, 166, 255, 0.48);
+  background: rgba(139, 116, 255, 0.085);
+}
+
+.mood-option__mark {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 1px solid #777780;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3px transparent;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.mood-option.is-selected .mood-option__mark {
+  border-color: #b5a6ff;
+  background: #b5a6ff;
+  box-shadow: inset 0 0 0 3px #232129;
+}
+
+.mood-option__copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mood-option__copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mood-option__copy small {
+  color: #7f7f87;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.mood-option__check {
+  color: #b5a6ff;
+  opacity: 0;
+  transform: scale(0.75);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.mood-option.is-selected .mood-option__check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.mood-details {
+  max-height: 0;
+  margin-top: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: max-height 260ms ease, margin 260ms ease, opacity 180ms ease, transform 180ms ease;
+}
+
+.mood-details.is-visible {
+  max-height: 370px;
+  margin-top: 24px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mood-intensity-fieldset legend {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: #d8d8dd;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mood-intensity-fieldset legend small {
+  color: #72727a;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.mood-intensity {
+  margin-top: 11px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.mood-intensity label {
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: #85858d;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+.mood-intensity label:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.mood-intensity label.is-active {
+  color: #f4f2ff;
+  border-color: rgba(181, 166, 255, 0.42);
+  background: rgba(139, 116, 255, 0.09);
+}
+
+.mood-intensity label:has(input:focus-visible) {
+  outline: 2px solid rgba(181, 166, 255, 0.72);
+  outline-offset: 2px;
+}
+
+.mood-note {
+  position: relative;
+  margin-top: 20px;
+  display: block;
+}
+
+.mood-note > span {
+  color: #d8d8dd;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mood-note > span small {
+  margin-left: 4px;
+  color: #707078;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.mood-note textarea {
+  width: 100%;
+  min-height: 82px;
+  margin-top: 9px;
+  padding: 12px 13px 26px;
+  resize: vertical;
+  color: #ededf0;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 12px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.mood-note textarea:focus {
+  border-color: rgba(181, 166, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(139, 116, 255, 0.07);
+}
+
+.mood-note textarea::placeholder {
+  color: #65656d;
+}
+
+.mood-note__count {
+  position: absolute;
+  right: 11px;
+  bottom: 8px;
+  color: #62626a;
+  font-size: 9px;
+}
+
+.mood-checkin__footer {
+  min-height: 58px;
+  margin-top: 22px;
+  padding-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mood-checkin__footer p {
+  margin: 0;
+  color: #696971;
+  font-size: 10px;
+}
+
+.mood-submit {
+  min-width: 108px;
+  height: 39px;
+  padding: 0 17px;
+  color: #111114;
+  font-size: 12px;
+  font-weight: 650;
+  border: 0;
+  border-radius: 11px;
+  background: #ededf0;
+  transition: background 160ms ease, transform 160ms ease, color 160ms ease;
+}
+
+.mood-submit:not(:disabled):hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.mood-submit:disabled {
+  color: #606067;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .mood-checkin {
+    padding: 74px 14px calc(106px + env(safe-area-inset-bottom));
+  }
+
+  .mood-checkin__intro {
+    margin: 24px 0 20px;
+  }
+
+  .mood-checkin__intro h1 {
+    font-size: 28px;
+  }
+
+  .mood-options {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .mood-option {
+    min-height: 58px;
+  }
+
+  .mood-checkin__footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .mood-submit {
+    width: 100%;
+  }
+
+  .mood-checkin__footer p {
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mood-option,
+  .mood-option__check,
+  .mood-details,
+  .mood-submit {
+    transition: none;
+  }
+}

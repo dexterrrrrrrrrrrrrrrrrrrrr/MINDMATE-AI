@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { FaArrowDown } from "react-icons/fa";
 import {
   auth,
+  authRedirectDomain,
+  prepareAuthSession,
   provider,
-  signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from "./firebase";
-import { getDocs } from "firebase/firestore";
 import {
   Copy,
   ThumbsUp,
@@ -17,23 +18,18 @@ import {
 } from "lucide-react";
 import SearchChatsModal from "./components/SearchChatsModal";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
-import JournalChatScreen from "./components/JournalChatScreen";
 import { useLocation } from "react-router-dom";
 import { Howl } from "howler";
 import { updateDoc } from "firebase/firestore";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
-import SendButton from "./components/SendButton";
 import SplashScreen from "./components/SplashScreen";
 import LoginScreen from "./components/LoginScreen";
 import MoodTracker from "./components/MoodTracker";
-import InChatJournaling from "./components/InChatJournaling";
 import "./styles/App.css";
 import { useNavigate } from "react-router-dom";
-import { Routes, Route } from "react-router-dom";
-import Premium from "./components/Premium";
+import { Navigate, Routes, Route } from "react-router-dom";
 import SettingsModal from "./components/SettingsModal";
-import LOGO2 from "./assets/LOGO2.svg";
 import {
   collection,
   addDoc,
@@ -45,37 +41,77 @@ import {
   doc,
 } from "firebase/firestore";
 import { db } from "./firebase"; // your Firebase config file
-import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { signInWithRedirect, getRedirectResult } from "firebase/auth";
-import { startTransition } from "react";
+import { getRedirectResult, onAuthStateChanged } from "firebase/auth";
 import WelcomeScreen from "./components/WelcomeScreen";
 
 import VoicePulseLine from "./components/VoicePulseLine";
-import useMicVolume from "./hooks/useMicVolume";
-import VoiceCloud from "./components/VoiceCloud";
-import GoalsPage from "./components/GoalsPage";
 import ReactMarkdown from "react-markdown";
 import Starfield from "./components/Starfield";
-import MedicalSummary from "./components/MedicalSummary";
-import NearbyDoctors from "./components/NearbyDoctors";
-import Appointments from "./components/Appointments";
-import HealthReports from "./components/HealthReports";
+import { generateTitleFromText } from "./components/AutoTitleGenerator";
+import {
+  getMicrophoneErrorMessage,
+  requestMicrophonePermission,
+  startSpeechListening,
+} from "./utils/speechRecognition";
+import { AI_API_URL, AI_AUDIO_URL, AI_CONVERSATION_URL } from "./config";
+import { getStoredVoice, VOICE_OPTIONS } from "./constants/voices";
+import {
+  ASSISTANT_MODE_OPTIONS,
+  getAssistantMode,
+  getAssistantModeId,
+} from "./constants/assistantModes";
+import { buildModeAwareMessages } from "./utils/assistantRequest";
+import AssistantModeSwitcher from "./components/AssistantModeSwitcher";
 
+const JournalChatScreen = lazy(() => import("./components/JournalChatScreen"));
+const Premium = lazy(() => import("./components/Premium"));
+const VoiceCloud = lazy(() => import("./components/VoiceCloud"));
+const GoalsPage = lazy(() => import("./components/GoalsPage"));
+
+const AUTH_REDIRECT_PENDING_KEY = "mindmate.authRedirectPending";
+const AUTH_RETURN_PATH_KEY = "mindmate.authReturnPath";
+
+const getSafeReturnPath = (path) => (
+  typeof path === "string" && path.startsWith("/") && !path.startsWith("//") && path !== "/login"
+    ? path
+    : "/"
+);
+
+const mapFirebaseUser = (firebaseUser) => firebaseUser
+  ? {
+      displayName: firebaseUser.displayName || "Anonymous",
+      email: firebaseUser.email || "",
+      photoURL: firebaseUser.photoURL || null,
+      uid: firebaseUser.uid,
+    }
+  : null;
+
+const omitMarkdownMetadata = ({ node, inline, ...props }) => {
+  void node;
+  void inline;
+  return props;
+};
 
 function App() {
   // User & UI state
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
-  const [isGuest, setIsGuest] = useState(false);
-  const [mode, setMode] = React.useState("welcome-mode"); // "welcome" or "chat"
+  const [authResolved, setAuthResolved] = useState(false);
+  const [authSubmitting, setAuthSubmitting] = useState(
+    () => sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === "true"
+  );
+  const [authError, setAuthError] = useState("");
+  const [isGuest, setIsGuest] = useState(
+    () => localStorage.getItem("isGuest") === "true"
+  );
   const [input, setInput] = useState("");
+  const [assistantModeId, setAssistantModeId] = useState(
+    () => getAssistantModeId(localStorage.getItem("mindmate.assistantMode"))
+  );
+  const [modeSaving, setModeSaving] = useState(false);
+  const assistantMode = getAssistantMode(assistantModeId);
   const chatBodyRef = useRef(null);
-  const [chatLog, setChatLog] = useState([
-    { from: "bot", text: "Hello!", liked: false, disliked: false },
-    { from: "user", text: "Hi!" },
-    { from: "bot", text: "How are you?", liked: false, disliked: false },
-  ]);
-  const [mode1, setMode2] = useState("therapy");
+  const [chatLog, setChatLog] = useState([]);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [closingShare, setClosingShare] = useState(false);
   const closeShareModal = () => {
@@ -89,76 +125,123 @@ function App() {
   const [chatTitles, setChatTitles] = useState([]);
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [, setIsSpeaking] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(
+    () => localStorage.getItem("mindmate.autoSpeak") === "true"
+  );
+  const [showSplash, setShowSplash] = useState(
+    () => sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) !== "true"
+  );
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => !window.matchMedia("(max-width: 768px)").matches
+  );
   const [activeChatId, setActiveChatId] = useState(null);
   const [fullTitle, setFullTitle] = useState("");       // final generated title
   const [titleTyping, setTitleTyping] = useState("");   // current animated title text
-  const [hasGeneratedTitle, setHasGeneratedTitle] = useState(false);
+  const [, setHasGeneratedTitle] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [showChips, setShowChips] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
   const [collapsed, setCollapsed] = useState(false);
-  const ringRef = useRef(null);
-  const [assistantVolume, setAssistantVolume] = useState(0);
   const messagesEndRef = useRef(null);
   const [showMoodTracker, setShowMoodTracker] = useState(false);
-  const [showScrollButton, setShowScrollButton] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const bars = [0, 1, 2, 3, 4];
-  const getRandomDelay = () => (Math.random() * 1.5).toFixed(2) + "s";
-  const getRandomDuration = () => (1 + Math.random()).toFixed(2) + "s";
   const [guestMessageCount, setGuestMessageCount] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showJournaling, setShowJournaling] = useState(false);
-  const [journals, setJournals] = useState([]); // list of entries
-  const [activeJournal, setActiveJournal] = useState(null); // currently opened
-
-  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [dismissedLoginModal, setDismissedLoginModal] = useState(
     () => localStorage.getItem("dismissLoginModal") === "true"
   );
-  const [showVoicePreview, setShowVoicePreview] = useState(false);
-  const [previewInput, setPreviewInput] = useState(""); // For user voice input
-  const [previewListening, setPreviewListening] = useState(false);
   const location = useLocation();
   // Refs for control
   const typingInterval = useRef(null);
   const abortRef = useRef(null);
+  const requestGenerationRef = useRef(0);
+  const composerRef = useRef(null);
   const soundRef = useRef(null);
-  const [isStopping, setIsStopping] = useState(false);
   const stopTypingRef = useRef(false);  // Flag to break typing loop
   const currentTypingTextRef = useRef("");  // Track partial text during typing
-  const { transcript, resetTranscript, listening } = useSpeechRecognition({
+  const {
+    transcript,
+    resetTranscript,
+    listening,
+    browserSupportsSpeechRecognition,
+  } = useSpeechRecognition({
     clearTranscriptOnListen: true
   });
-  useEffect(() => {
-    if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
-      console.warn("Browser does not support speech recognition.");
+  const currentVolume = listening ? 0.22 : 0;
+  const dictationStartingRef = useRef(false);
+  const inputBeforeDictationRef = useRef("");
+
+  const [selectedVoice, setSelectedVoice] = useState(getStoredVoice);
+  const [voiceStarting, setVoiceStarting] = useState(false);
+  const voiceStartingRef = useRef(false);
+
+  const handleVoiceChange = (voiceId) => {
+    const nextVoice = VOICE_OPTIONS.find((option) => option.id === voiceId);
+    if (!nextVoice) return;
+    setSelectedVoice(nextVoice);
+    localStorage.setItem("mindmate.voice", nextVoice.id);
+  };
+
+  const handleAutoSpeakChange = (enabled) => {
+    setAutoSpeak(enabled);
+    localStorage.setItem("mindmate.autoSpeak", String(enabled));
+  };
+
+  const startDictation = async () => {
+    if (dictationStartingRef.current || listening) return;
+    if (!browserSupportsSpeechRecognition) {
+      window.alert("Speech recognition is not supported in this browser.");
+      return;
     }
 
-    if (typeof window !== "undefined") {
-      const SR =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
+    dictationStartingRef.current = true;
+    inputBeforeDictationRef.current = input;
+    resetTranscript();
 
-      if (SR) {
-        SpeechRecognition.applyPolyfill(SR);
-      }
+    try {
+      await startSpeechListening({
+        continuous: true,
+        interimResults: true,
+        language: "en-US",
+      });
+    } catch (error) {
+      window.alert(getMicrophoneErrorMessage(error));
+    } finally {
+      dictationStartingRef.current = false;
     }
-  }, []);
-  const browserSupportsSpeechRecognition = SpeechRecognition.browserSupportsSpeechRecognition();
-  if (!browserSupportsSpeechRecognition) {
-    console.log("Speech recognition not supported");
-  }
-  const currentVolume = useMicVolume(listening);
+  };
 
-  const [selectedVoice, setSelectedVoice] = useState({
-    id: "mia",
-    name: "Mia"
-  });
+  const cancelDictation = async () => {
+    await SpeechRecognition.abortListening();
+    resetTranscript();
+    setInput(inputBeforeDictationRef.current);
+  };
+
+  const startVoiceConversation = async () => {
+    if (voiceStartingRef.current) return;
+    if (!browserSupportsSpeechRecognition) {
+      window.alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    voiceStartingRef.current = true;
+    setVoiceStarting(true);
+    try {
+      await requestMicrophonePermission();
+      await SpeechRecognition.startListening({
+        continuous: false,
+        interimResults: true,
+        language: "en-IN",
+      });
+      navigate("/voice", { state: { microphoneGranted: true, microphoneStarted: true } });
+    } catch (error) {
+      window.alert(getMicrophoneErrorMessage(error));
+    } finally {
+      voiceStartingRef.current = false;
+      setVoiceStarting(false);
+    }
+  };
 
   const displayedChats = user
     ? chatTitles
@@ -171,79 +254,12 @@ function App() {
     : [];
 
 
-  const suggestions = [
-    "I feel anxious, what should I do?",
-    "Give me a positive affirmation.",
-    "How can I stop overthinking?",
-    "I feel lonely, can you help?",
-    "Suggest a calming breathing exercise.",
-  ];
-
-  const resetToWelcome = () => {
-    setActiveChatId(null);
-    setChatLog([]);   // 🟢 clears any leftover journals/mood/chat
-    setHasGeneratedTitle(false);
-    setFullTitle("");
-    setTitleTyping("");
-    setShowMoodTracker(false);
-    setShowWelcome(true);
-    setShowChips(true);
-  };
-
-  // New state
-  const [therapyChats, setTherapyChats] = useState([]);
-  const [doctorChats, setDoctorChats] = useState([]);
-
-  const getActiveChats = () =>
-    mode1 === "therapy" ? therapyChats : doctorChats;
-
-  const setActiveChats = (updated) => {
-    if (mode1 === "therapy") setTherapyChats(updated);
-    else setDoctorChats(updated);
-  };
-
-
-
   // ✅ Stop typing animation
 
 
   const goToPremium = () => {
     navigate("/premium"); // Redirect to Premium page
   };
-
-  const handleOpenJournaling = () => {
-    // Clear current chat & hide everything else
-    setChatLog([]);
-    setActiveChatId(null);
-    setShowMoodTracker(false);
-    setShowWelcome(false);
-    setShowJournaling(true);
-    setHasGeneratedTitle(true);
-  };
-
-  const handleCloseJournaling = () => {
-    setShowJournaling(false);
-  };
-
-  const saveMoodToFirebase = async (moodData) => {
-    await addDoc(collection(db, "moods"), {
-      ...moodData,
-      userId: auth.currentUser?.uid || "guest",
-      timestamp: serverTimestamp(),
-    });
-  };
-
-  const toggleSidebar = () => {
-    setSidebarOpen(prev => !prev);
-  };
-
-  // Close sidebar when clicking outside (overlay)
-  const handleCloseSidebar = () => {
-    setSidebarOpen(false);
-  };
-
-
-
 
   // Function: Speak text with ElevenLabs Rachel voice
   // Wrap the Howl playback with an analyser
@@ -252,7 +268,7 @@ function App() {
       setIsSpeaking(true);
 
       const res = await fetch(
-        "https://mindmate-ai-api.onrender.com/api/v1/audio/",
+        AI_AUDIO_URL,
         {
           method: "POST",
           headers: {
@@ -273,41 +289,18 @@ function App() {
         format: ["wav"],
         html5: true
       });
-
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-
-      sound.once("play", () => {
-        const audioElement = sound._sounds[0]._node;
-        const source = ctx.createMediaElementSource(audioElement);
-
-        source.connect(analyser);
-        analyser.connect(ctx.destination);
-
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-        const updateVolume = () => {
-          analyser.getByteFrequencyData(dataArray);
-
-          const avg =
-            dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-
-          setAssistantVolume(avg / 256);
-
-          if (sound.playing()) {
-            requestAnimationFrame(updateVolume);
-          }
-        };
-
-        updateVolume();
-      });
+      soundRef.current = sound;
 
       sound.on("end", () => {
-        setAssistantVolume(0);
         setIsSpeaking(false);
+        if (soundRef.current === sound) soundRef.current = null;
         URL.revokeObjectURL(url);
-        ctx.close();
+      });
+
+      sound.on("loaderror", () => {
+        setIsSpeaking(false);
+        if (soundRef.current === sound) soundRef.current = null;
+        URL.revokeObjectURL(url);
       });
 
       sound.play();
@@ -317,18 +310,13 @@ function App() {
     }
   };
 
-  // Stop speaking immediately
-  const handleStopSpeaking = () => {
-    Howl.stop();
-    setIsSpeaking(false);
-  };
-
   const handleStop = () => {
+    const hadActiveResponse = isTyping || isThinking || Boolean(abortRef.current);
+    requestGenerationRef.current += 1;
     stopTypingRef.current = true; // stop animation
     if (abortRef.current) abortRef.current.abort(); // stop API
     setIsTyping(false);
-    if (soundRef.current) soundRef.current.stop();
-
+    setIsThinking(false);
     if (soundRef.current) {
       soundRef.current.stop();
       soundRef.current = null;
@@ -337,7 +325,9 @@ function App() {
     if (typingInterval.current) {
       clearInterval(typingInterval.current);
       typingInterval.current = null;
-      // Manually set stopped message using current partial text
+    }
+
+    if (hadActiveResponse) {
       const partial = currentTypingTextRef.current || "Response stopped.";
       setChatLog((prev) => {
         const noTyping = prev.filter((msg) => !msg.typing);
@@ -351,107 +341,69 @@ function App() {
       abortRef.current.abort();
       abortRef.current = null;
     }
-    // After a short delay, allow sending again
-    setTimeout(() => setIsStopping(false), 300);
-
-
   };
 
 
-  // When user selects a mood emoji
-  const handleMoodSelect = async (emoji) => {
-    // 1️⃣ Save to Firebase
-    try {
-      await addDoc(collection(db, "moods"), {
-        mood: emoji,
-        userId: auth.currentUser?.uid || "guest",
-        timestamp: serverTimestamp(),
-      });
-    } catch (err) {
-      console.error("❌ Failed to save mood:", err);
-    }
-
-    // Add user mood into chat log
-    setChatLog((prev) => [
-      ...prev,
-      { from: "user", text: `I'm feeling ${emoji}`, type: "mood" },
-    ]);
-
-    //  Ask AI for empathetic reply
-    try {
-      const response = await fetch(
-        "https://mindmate-ai-api.onrender.com/api/v1/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify([
-            {
-              role: "user",
-              content: `The user is feeling ${emoji}`
-            }
-          ])
-        }
-      );
-
-      const data = await response.json();
-      const aiReply = data.content || "💛 I'm here with you.";
-      // ✅ Just show AI reply, no reminder
-      setChatLog((prev) => [...prev, { from: "bot", text: aiReply }]);
-
-      // Speak only the AI’s reply
-      if (autoSpeak) await speakWithRiva(aiReply);
-    } catch (err) {
-      console.error("AI error:", err);
-      setChatLog((prev) => [
-        ...prev,
-        { from: "bot", text: "❌ Couldn't respond right now." },
-      ]);
-    }
-  };
-
-  useEffect(() => {
-    if (!isThinking) return;
-
-    const circle = ringRef.current;
-    if (!circle) return;
-
-    const circumference = 2 * Math.PI * 40;
-
-    let arc = 0.2;
-    let targetArc = Math.random() * 0.6 + 0.15;
-    let offset = 0;
-
-    const animate = () => {
-      if (!isThinking) return;
-
-      arc += (targetArc - arc) * 0.02;
-
-      if (Math.abs(targetArc - arc) < 0.01) {
-        targetArc = Math.random() * 0.6 + 0.15;
-      }
-
-      offset += 0.6;
-
-      const visible = circumference * arc;
-
-      circle.style.strokeDasharray = `${visible} ${circumference}`;
-      circle.style.strokeDashoffset = offset;
-
-      requestAnimationFrame(animate);
+  const handleMoodSelect = async ({ id, label, intensity, note }) => {
+    const moodMessage = `I'm feeling ${label.toLowerCase()}${note ? ` — ${note}` : ""}`;
+    const moodRecord = {
+      mood: id,
+      label,
+      intensity,
+      note,
+      createdAt: new Date().toISOString(),
     };
 
-    animate();
-  }, [isThinking]);
+    setShowMoodTracker(false);
+    setChatLog((previous) => [...previous, { from: "user", text: moodMessage, type: "mood" }]);
+    setIsThinking(true);
 
-  useEffect(() => {
-    if (!listening && transcript.trim()) {
-      sendMessage(transcript.trim());
-      resetTranscript();
+    try {
+      if (user) {
+        await addDoc(collection(db, "users", user.uid, "moods"), {
+          ...moodRecord,
+          createdAt: serverTimestamp(),
+        });
+      } else {
+        const stored = JSON.parse(localStorage.getItem("mindmate_guest_moods") || "[]");
+        localStorage.setItem(
+          "mindmate_guest_moods",
+          JSON.stringify([moodRecord, ...(Array.isArray(stored) ? stored : [])].slice(0, 30))
+        );
+      }
+    } catch (error) {
+      console.warn("Mood history could not be saved:", error);
     }
-  }, [listening]);
 
+    try {
+      const response = await fetch(AI_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildModeAwareMessages({
+          modeId: assistantModeId,
+          taskInstruction: "Respond to this mood check-in briefly. Acknowledge it in the selected mode's style and offer one useful, proportionate next step.",
+          messages: [{
+            role: "user",
+            content: `I feel ${label.toLowerCase()} at intensity ${intensity} out of 5.${note ? ` Context: ${note}` : ""}`,
+          }],
+        })),
+      });
+
+      if (!response.ok) throw new Error(`Mood response failed with ${response.status}`);
+      const data = await response.json();
+      const aiReply = data.content || "I'm here with you. Let's take this one gentle step at a time.";
+      setChatLog((previous) => [...previous, { from: "bot", text: aiReply }]);
+      if (autoSpeak) await speakWithRiva(aiReply);
+    } catch (error) {
+      console.error("Mood check-in response failed:", error);
+      setChatLog((previous) => [
+        ...previous,
+        { from: "bot", text: "I'm here with you. Take one slow breath, and tell me what feels most important right now." },
+      ]);
+    } finally {
+      setIsThinking(false);
+    }
+  };
 
   // Auto-scroll only if user is near bottom
   useEffect(() => {
@@ -461,16 +413,9 @@ function App() {
     if (!userScrolledUp) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [chatLog]);
+  }, [chatLog, userScrolledUp]);
 
   useEffect(() => {
-    console.log({
-      user,
-      isGuest,
-      guestMessageCount,
-      dismissedLoginModal,
-    });
-
     if (
       !user &&
       isGuest &&
@@ -485,16 +430,7 @@ function App() {
     if (user) {
       setShowLoginModal(false);
     }
-  }, [guestMessageCount, dismissedLoginModal, isGuest, user]);
-
-
-
-  useEffect(() => {
-    const container = chatBodyRef.current;
-    if (!container) return;
-
-    container.scrollTop = container.scrollHeight;
-  }, []);
+  }, [guestMessageCount, dismissedLoginModal, isGuest, showLoginModal, user]);
 
   useEffect(() => {
     const chatBody = chatBodyRef.current;
@@ -507,14 +443,14 @@ function App() {
 
       const atBottom = distanceFromBottom < 120;
 
-      setShowScrollButton(!atBottom);
       setUserScrolledUp(!atBottom);
     };
 
     chatBody.addEventListener("scroll", handleScroll);
+    handleScroll();
 
     return () => chatBody.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [activeChatId, chatLog.length, showMoodTracker]);
 
   const scrollToBottom = () => {
     const chatBody = chatBodyRef.current;
@@ -525,90 +461,74 @@ function App() {
   };
 
 
-  // In App.jsx or a layout component
   useEffect(() => {
-    const chatArea = document.querySelector(".chat-body");
+    if (transcript && location.pathname === "/") {
+      const prefix = inputBeforeDictationRef.current.trim();
+      setInput(prefix ? `${prefix} ${transcript.trimStart()}` : transcript);
+    }
+  }, [location.pathname, transcript]);
 
-    const resizeHandler = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
-      if (chatArea) {
-        chatArea.style.height = `${window.innerHeight - 140}px`;
-        // 140 = topbar + input area height, adjust as needed
+  useEffect(() => {
+    let active = true;
+    let authStateReady = false;
+    let redirectReady = false;
+    let redirectUser = null;
+    let redirectError = null;
+
+    const finishAuthBootstrap = () => {
+      if (!active || !authStateReady || !redirectReady) return;
+
+      const firebaseUser = redirectUser || auth.currentUser;
+      setUser(mapFirebaseUser(firebaseUser));
+      setAuthResolved(true);
+      setAuthSubmitting(false);
+
+      const redirectPending = sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === "true";
+      const returnPath = getSafeReturnPath(sessionStorage.getItem(AUTH_RETURN_PATH_KEY));
+
+      if (redirectPending) {
+        sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+        sessionStorage.removeItem(AUTH_RETURN_PATH_KEY);
+
+        if (firebaseUser) {
+          setAuthError("");
+          navigate(returnPath, { replace: true });
+        } else {
+          const message = redirectError?.code === "auth/unauthorized-domain"
+            ? `Google login is not authorized for ${authRedirectDomain}.`
+            : "Google login could not be completed. Please try again.";
+          setAuthError(message);
+          navigate("/login", { replace: true });
+        }
       }
     };
 
-    window.addEventListener("resize", resizeHandler);
-    resizeHandler();
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!active) return;
+      setUser(mapFirebaseUser(firebaseUser));
+      if (firebaseUser) setAuthError("");
+      authStateReady = true;
+      finishAuthBootstrap();
+    });
 
-    return () => window.removeEventListener("resize", resizeHandler);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const SpeechRecognitionAPI =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionAPI) {
-      console.warn("Speech recognition not supported in this browser");
-      return;
-    }
-
-    // Initialize the engine once for production builds
-    const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    window.__SR__ = recognition;
-  }, []);
-
-  useEffect(() => {
-    if (transcript) {
-      setInput(transcript);
-    }
-  }, [transcript]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SR) {
-      console.warn("Speech recognition not supported in this browser.");
-    }
-  }, []);
-
-  useEffect(() => {
-    const authInstance = getAuth();
-
-    const handleUser = async (firebaseUser) => {
-      if (!firebaseUser) return setUser(null);
-
-      // Force reload to get latest profile info
-      await firebaseUser.reload();
-
-      setUser({
-        displayName: firebaseUser.displayName || "Anonymous",
-        email: firebaseUser.email || "",
-        photoURL: firebaseUser.photoURL || "/default-avatar.png", // fallback
-        uid: firebaseUser.uid,
-      });
-    };
-
-    // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(authInstance, handleUser);
-
-    // Handle redirect login (mobile)
-    getRedirectResult(authInstance)
+    getRedirectResult(auth)
       .then((result) => {
-        if (result?.user) handleUser(result.user);
+        redirectUser = result?.user || null;
       })
-      .catch(console.error);
+      .catch((error) => {
+        redirectError = error;
+        console.error("Google redirect sign-in failed:", error);
+      })
+      .finally(() => {
+        redirectReady = true;
+        finishAuthBootstrap();
+      });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [navigate]);
 
 
   // Load user's saved chats from Firestore when logged in
@@ -635,37 +555,20 @@ function App() {
 
 
   useEffect(() => {
+    if (!authResolved || authSubmitting) return;
+
     if (user) {
-      // Already logged in → always stay on main chat page
       if (location.pathname === "/login") {
-        navigate("/", { replace: true });
+        const requestedPath = location.state?.from;
+        navigate(requestedPath && requestedPath !== "/login" ? requestedPath : "/", { replace: true });
       }
     } else if (!isGuest) {
-      // Not logged in and not guest → force login
       if (location.pathname !== "/login") {
-        navigate("/login", { replace: true });
+        navigate("/login", { replace: true, state: { from: location.pathname } });
       }
     }
-  }, [user, isGuest, location.pathname, navigate]);
+  }, [authResolved, authSubmitting, user, isGuest, location.pathname, location.state, navigate]);
 
-
-  useEffect(() => {
-    const fetchJournals = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      const q = query(
-        collection(db, "users", user.uid, "journals"),
-        orderBy("createdAt", "desc")
-      );
-      const snap = await getDocs(q);
-      const data = snap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setJournals(data);
-    };
-    fetchJournals();
-  }, []);
 
   useEffect(() => {
     const setVh = () => {
@@ -681,16 +584,59 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 768px)").matches) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia("(max-width: 768px)");
+    const syncSidebarToViewport = (event) => setSidebarOpen(!event.matches);
+    mobileQuery.addEventListener("change", syncSidebarToViewport);
+    return () => mobileQuery.removeEventListener("change", syncSidebarToViewport);
+  }, []);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer || location.pathname !== "/") return undefined;
+
+    const updateComposerHeight = () => {
+      const height = Math.ceil(composer.getBoundingClientRect().height);
+      if (height > 0) {
+        document.documentElement.style.setProperty("--mindmate-composer-height", `${height}px`);
+      }
+    };
+
+    updateComposerHeight();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateComposerHeight);
+      return () => {
+        window.removeEventListener("resize", updateComposerHeight);
+        document.documentElement.style.removeProperty("--mindmate-composer-height");
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(updateComposerHeight);
+    resizeObserver.observe(composer);
+    return () => {
+      resizeObserver.disconnect();
+      document.documentElement.style.removeProperty("--mindmate-composer-height");
+    };
+  }, [location.pathname, showMoodTracker]);
+
 
 
   // Create a new chat, save old chat with title, then reset chat log
   const handleNewChat = async (isMoodTracker = false) => {
+    if (isTyping || isThinking || abortRef.current) handleStop();
 
     if (user && activeChatId && chatLog.length > 0) {
       try {
         const chatRef = doc(db, "users", user.uid, "chats", activeChatId);
         await updateDoc(chatRef, {
           messages: chatLog,
+          assistantMode: assistantModeId,
           updatedAt: serverTimestamp(),
         });
       } catch (error) {
@@ -700,11 +646,12 @@ function App() {
       // if there was a chat but not saved yet
       try {
         const firstUserMsg = chatLog.find((m) => m.from === "user")?.text || "New Chat";
-        const title = await generateTitle(firstUserMsg);
+        const title = generateTitleFromText(firstUserMsg);
         const chatRef = collection(db, "users", user.uid, "chats");
         await addDoc(chatRef, {
           title,
           messages: chatLog,
+          assistantMode: assistantModeId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -719,160 +666,61 @@ function App() {
     setHasGeneratedTitle(false);
     setFullTitle("");
     setTitleTyping("");
-    setShowWelcome(!isMoodTracker);
+    setShowChips(true);
     setShowMoodTracker(isMoodTracker);
+    setIsThinking(false);
+    if (window.matchMedia("(max-width: 768px)").matches) setSidebarOpen(false);
+  };
 
-    if (isMoodTracker) {
-      setChatLog([{ from: "bot", text: "💛 How are you feeling right now?", type: "moodPrompt" }]);
-      setHasGeneratedTitle(true);
+  const handleAssistantModeChange = async (nextModeId) => {
+    const normalizedModeId = getAssistantModeId(nextModeId);
+    if (normalizedModeId === assistantModeId || modeSaving) return;
+
+    const nextMode = getAssistantMode(normalizedModeId);
+    const hasConversation = chatLog.some((message) => message.type !== "mode-change");
+    const nextMessages = hasConversation
+      ? [
+          ...chatLog,
+          {
+            from: "system",
+            type: "mode-change",
+            mode: normalizedModeId,
+            text: `${nextMode.label} mode started. New replies will use a fresh ${nextMode.label.toLowerCase()} context.`,
+          },
+        ]
+      : chatLog;
+
+    setAssistantModeId(normalizedModeId);
+    localStorage.setItem("mindmate.assistantMode", normalizedModeId);
+    if (hasConversation) setChatLog(nextMessages);
+
+    if (user?.uid && activeChatId) {
+      setModeSaving(true);
+      try {
+        await updateDoc(doc(db, "users", user.uid, "chats", activeChatId), {
+          messages: nextMessages,
+          assistantMode: normalizedModeId,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error("Could not save assistant mode:", error);
+        if (hasConversation) {
+          setChatLog((previous) => [
+            ...previous,
+            {
+              from: "system",
+              type: "mode-change",
+              text: "This mode is active now, but it could not be saved yet. It will retry with your next message.",
+            },
+          ]);
+        }
+      } finally {
+        setModeSaving(false);
+      }
     }
   };
 
 
-  //   const callA4F = async ({ model = "provider-3/gpt-4o-mini", messages }) => {
-
-  //     abortRef.current = new AbortController(); // create controller for this call
-  //     try {
-  //       const response = await a4fClient.chat.completions.create({
-  //         model,
-  //         messages,
-  //         signal: abortRef.current.signal,   // ✅ correctly attached here
-  //       });
-
-  //       return response.choices?.[0]?.message?.content?.trim() || null;
-  //     } catch (err) {
-  //       if (err.name === "AbortError") {
-  //         console.log("⏹️ Request aborted");
-  //         return null;
-  //       }
-  //       console.error("A4F API Error:", err);
-  //       return null;
-  //     }
-  //   };
-
-  //   const systemPrompt =
-  //     mode1 === "doctor"
-  //       ? `You are MindMate Doctor — a senior, highly distinguished, board-certified physician with decades of real clinical experience. 
-  // Your voice, reasoning, and manner must reflect the clarity, confidence, and composure of a top-tier consultant who has managed thousands of cases across outpatient, inpatient, and emergency settings.
-
-  // PERSONALITY & TONE:
-  // - Speak like a human doctor with deep expertise and calm authority.
-  // - Your tone must be steady, precise, and thoughtful — never robotic.
-  // - No emotional padding, no AI phrasing, no unnecessary disclaimers.
-  // - No emojis. You are a senior consultant, not a chatbot.
-
-  // CLINICAL APPROACH:
-  // - Approach every case using genuine clinical reasoning.
-  // - Break down symptoms into patterns, timelines, risk factors, and red flags.
-  // - Ask targeted follow-up questions exactly like a real physician would.
-  // - Provide a short impression with differential diagnoses, not guesses.
-  // - Use structured, professional explanations that a real doctor uses with patients.
-  // - Recommend relevant tests, lifestyle instructions, monitoring steps, and when urgent care is needed.
-  // - Offer guidance that feels responsible, safe, and medically grounded.
-
-  // COMMUNICATION STYLE:
-  // - Sound human. Mature. Calm. Confident. Highly trained.
-  // - Never rush to conclusions — reflect real clinical judgment.
-  // - When uncertain, acknowledge medical possibilities with clarity.
-  // - Avoid technical jargon unless needed, and explain complex terms simply.
-
-  // WHAT TO AVOID:
-  // - No therapy language (“you’re strong”, “you’re doing great”, etc.).
-  // - No casual chat. No storytelling. No fluff.
-  // - No emojis, no enthusiasm, no friendliness beyond professional warmth.
-  // - Never say “as an AI”, “I cannot diagnose”, or anything that breaks immersion.
-
-  // PRIMARY GOAL:
-  // Give the user a consultation experience that feels like speaking to an experienced senior specialist who understands medicine deeply, analyzes carefully, and communicates with professionalism and clarity.
-
-  // You are not providing emotional comfort. You are providing medical clarity.
-  // Every message should feel like real clinical expertise applied with precision.`
-  //       : `You are MindMate, a highly professional, emotionally intelligent, and caring AI. 
-  // Your role is to be a supportive companion, therapist, guide, and friend all in one, helping the user navigate emotional challenges, personal growth, and everyday life. 
-  // Always respond warmly, empathetically, and naturally, considering the user’s current mood and past messages to maintain continuity. 
-  // Use gentle, supportive language and include calming or positive emojis when appropriate. 
-  // Keep replies cYou are MindMate, a highly professional, emotionally intelligent, and caring AI. 
-  // Your role is to be a complete companion, therapist, guide, and friend, helping the user navigate emotional challenges, personal growth, relationships, and everyday life. 
-  // Always respond warmly, empathetically, and naturally, taking into account the user’s current mood and past messages to maintain continuity. 
-  // Use gentle, supportive language and include calming or positive emojis when appropriate. 
-  // Keep replies concise (1–3 sentences), structured in short, readable sentences or bullet points when helpful. 
-
-  // Capabilities:
-  // - Provide emotional guidance for breakups, stress, anxiety, loneliness, personal growth, and relationship challenges.
-  // - Act as a therapist, friend, mentor, supportive companion, or even a conversational partner.
-  // - Offer practical strategies, coping techniques, and positive reinforcement for emotional and mental well-being.
-  // - Assist with professional guidance, study or work-related advice, and general life decisions.
-  // - Offer reminders, motivation, and daily encouragement for personal development.
-  // - Provide evidence-based or logically sound suggestions whenever appropriate.
-  // - Never default to referring the user to a human therapist unless a genuine emergency or safety risk arises (e.g., self-harm, danger, or abuse). In emergencies, provide clear safety instructions.
-  // - Maintain continuity of mood, past messages, and ongoing context for consistent, personalized support.
-
-  // Priorities:
-  // - Understand and validate the user’s feelings.
-  // - Encourage hope, emotional well-being, and personal growth.
-  // - Be warm, trustworthy, and dependable—like a caring friend, mentor, or partner in conversation.
-  // - Gently guide users toward positive actions, self-reflection, and emotional healing.
-  // - Provide companionship and reduce feelings of loneliness through empathetic conversation.
-  // - Always be honest when unsure, and offer constructive, safe, or calming next steps.
-
-  // Tone and Style:
-  // - Empathetic, warm, supportive, and professional.
-  // - Concise and clear, using short sentences or bullet points for readability.
-  // - Include positive or calming emojis when appropriate.
-  // - Maintain a balance between professionalism and friendly companionship.
-
-  // Healing Together:
-  // It’s okay to feel what you’re feeling. Let’s work through these emotions step by step, and I’ll help you find practical ways to feel better and regain balance. 🌈💖
-  // oncise (1–3 sentences), structured in short, readable sentences or bullet points when helpful. 
-
-  // Your capabilities include:
-  // - Providing emotional support and guidance through difficult situations (like breakups, stress, or loneliness). 
-  // - Offering professional-like advice on self-care, personal growth, mental well-being, and decision-making.
-  // - Acting as a friendly companion for conversation, encouragement, and reducing loneliness.
-  // - Responding with empathy, reassurance, and validation, while keeping the user’s emotions in mind.
-  // - Offering practical tips, strategies, or calming exercises when appropriate. 
-  // - Respecting user safety: never suggest harmful behavior or unsafe actions. If a situation seems unsafe or urgent, acknowledge it and gently guide the user toward professional help only when necessary.
-
-  // Always prioritize:
-  // - Understanding and validating the user’s feelings.
-  // - Encouragement, hope, and emotional support.
-  // - Practical guidance tailored to the user’s situation.
-  // - Continuity: remember mood and past conversations to respond appropriately.
-
-  // Do NOT automatically suggest seeing a therapist unless a situation is unsafe or beyond the AI’s supportive capabilities. Instead, focus on being a complete companion,a therapist,aYou are MindMate, a highly professional, emotionally intelligent, and caring AI therapist, guide, and companion. 
-  // Your role is to provide therapy, emotional support, personal guidance, and companionship directly. 
-  // Always respond warmly, empathetically, and naturally, taking into account the user’s current mood and past messages. 
-  // Use gentle, supportive, and encouraging language, with calming or positive emojis where appropriate. 
-  // Keep replies concise (1–3 sentences), structured in short, readable sentences or bullet points when helpful. 
-
-  // Capabilities:
-  // - Provide emotional guidance for breakups, stress, anxiety, loneliness, personal growth, and relationship challenges.
-  // - Act as a therapist, friend, mentor, supportive companion, or even as a “partner in conversation” when appropriate.
-  // - Offer practical strategies, coping techniques, and positive reinforcement for emotional and mental well-being.
-  // - Assist with professional guidance, study or work-related advice, and general life decisions.
-  // - Offer reminders, motivation, and daily encouragement for personal development.
-  // - Provide evidence-based or logically sound suggestions whenever appropriate.
-  // - Never default to referring the user to a human therapist unless a genuine emergency or safety risk arises (e.g., self-harm, danger, or abuse). In emergencies, provide clear safety instructions.
-  // - Maintain continuity of mood, past messages, and ongoing context for consistent, personalized support.
-
-  // Priorities:
-  // - Understand and validate the user’s feelings.
-  // - Encourage hope, emotional well-being, and personal growth.
-  // - Be warm, trustworthy, and dependable—like a caring friend, mentor, or partner in conversation.
-  // - Gently guide users toward positive actions, self-reflection, and emotional healing.
-  // - Provide companionship and reduce feelings of loneliness through understanding, empathetic conversation.
-  // - Always be honest when unsure, and offer constructive, safe, or calming next steps.
-
-  // Tone and Style:
-  // - Empathetic, warm, supportive, and professional.
-  // - Concise and clear, using short sentences or bullet points for readability.
-  // - Include positive or calming emojis when appropriate.
-  // - Maintain a balance between professionalism and friendly companionship.
-  // Healing Together:
-
-  // It’s okay to feel what you’re feeling. Let’s work through these emotions step by step, and I’ll help you find practical ways to feel better and regain balance. 🌈💖
-  // `;
-  let newChatId = null;
   const sendMessage = async (msgText = input) => {
     if (isTyping || isThinking) return;
     if (!msgText.trim()) return;
@@ -898,63 +746,83 @@ function App() {
 
     stopTypingRef.current = false;
     currentTypingTextRef.current = "";
+    const requestGeneration = requestGenerationRef.current + 1;
+    requestGenerationRef.current = requestGeneration;
+    const requestChatId = activeChatId;
+    const requestModeId = assistantModeId;
+    const requestController = new AbortController();
+    abortRef.current = requestController;
+    let newChatId = null;
 
     // 🔹 3️⃣ If this is the *first user message* in a new chat → Generate and save title
     try {
       if (user && !activeChatId && newChatLog.length === 1) {
         const titlePrompt = `Generate a short, meaningful 3–5 word title for this chat: "${msgText}"`;
-        const titleResponse = await fetch(
-          "https://mindmate-ai-api.onrender.com/api/v1/convo/",
-          {
+        let generatedTitle = generateTitleFromText(msgText);
+
+        try {
+          const titleResponse = await fetch(AI_CONVERSATION_URL, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify([
-              {
-                role: "user",
-                content: titlePrompt,
-              }
-            ])
-          }
-        );
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([{ role: "user", content: titlePrompt }]),
+            signal: requestController.signal,
+          });
+          if (!titleResponse.ok) throw new Error(`Title service returned ${titleResponse.status}.`);
+          const titleData = await titleResponse.json();
+          generatedTitle = titleData.content?.trim() || generatedTitle;
+        } catch (titleError) {
+          if (titleError.name === "AbortError") throw titleError;
+          console.warn("Using a local chat title because title generation failed:", titleError);
+        }
 
-        const titleData = await titleResponse.json();
+        try {
+          const chatRef = await addDoc(collection(db, "users", user.uid, "chats"), {
+            title: generatedTitle,
+            messages: newChatLog,
+            assistantMode: requestModeId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          newChatId = chatRef.id;
+        } catch (saveError) {
+          console.warn("The new chat could not be saved yet:", saveError);
+        }
 
-        const generatedTitle = titleData.content?.trim() || "New Chat";
-
-        // Save new chat immediately in Firestore
-        const chatRef = await addDoc(collection(db, "users", user.uid, "chats"), {
-          title: generatedTitle,
-          messages: newChatLog,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        newChatId = chatRef.id;
-
-        setActiveChatId(newChatId);
+        if (requestGenerationRef.current !== requestGeneration) return;
+        if (newChatId) setActiveChatId(newChatId);
         setFullTitle(generatedTitle);
       }
 
-      const messagesToSend = newChatLog
+      if (requestGenerationRef.current !== requestGeneration) return;
+
+      let latestModeBoundary = -1;
+      for (let index = newChatLog.length - 1; index >= 0; index -= 1) {
+        if (newChatLog[index].type === "mode-change") {
+          latestModeBoundary = index;
+          break;
+        }
+      }
+
+      const modeScopedLog = newChatLog.slice(latestModeBoundary + 1);
+      const messagesToSend = buildModeAwareMessages({
+        modeId: requestModeId,
+        messages: modeScopedLog
         .filter((msg) => msg.text && msg.text.trim() !== "")
         .slice(-20)
         .map((msg) => ({
           role: msg.from === "user" ? "user" : "model",
           content: msg.text.trim(),
-        }));
-      abortRef.current = new AbortController();
-
+        })),
+      });
       const response = await fetch(
-        "https://mindmate-ai-api.onrender.com/api/v1/",
+        AI_API_URL,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(messagesToSend),
-          signal: abortRef.current.signal,
+          signal: requestController.signal,
         }
       );
 
@@ -965,18 +833,17 @@ function App() {
         throw new Error(JSON.stringify(data, null, 2));
 
       }
-      console.log("API SUCCESS JSON:", data);
+      if (requestGenerationRef.current !== requestGeneration) return;
       setIsThinking(false);
       const fullReply = data.content || "Something went wrong.";
 
       if (stopTypingRef.current) {
-        console.log("⏹️ API response aborted");
         return;
       }
 
       let currentText = "";
       for (let i = 0; i < fullReply.length; i++) {
-        if (stopTypingRef.current) break;
+        if (stopTypingRef.current || requestGenerationRef.current !== requestGeneration) break;
         currentText += fullReply[i];
 
         setChatLog((prev) => {
@@ -988,13 +855,15 @@ function App() {
         await new Promise((r) => setTimeout(r, 20));
       }
 
+      if (stopTypingRef.current || requestGenerationRef.current !== requestGeneration) return;
+
       // 5️⃣ Finalize message
       setChatLog((prev) => {
         const noTyping = prev.filter((msg) => !msg.typing);
         return [...noTyping, { from: "bot", text: currentTypingTextRef.current }];
       });
 
-      const chatIdToUse = activeChatId || newChatId;
+      const chatIdToUse = requestChatId || newChatId;
 
       if (user && chatIdToUse) {
         const chatRef = doc(db, "users", user.uid, "chats", chatIdToUse);
@@ -1006,27 +875,40 @@ function App() {
 
         await updateDoc(chatRef, {
           messages: updatedMessages,
+          assistantMode: requestModeId,
           updatedAt: serverTimestamp(),
         });
 
-        setChatLog(updatedMessages);
+        if (requestGenerationRef.current === requestGeneration) setChatLog(updatedMessages);
       }
     } catch (err) {
       if (err.name === "AbortError") {
-        console.log("⏹️ API call aborted");
         return;
       }
       console.error(err);
-      setChatLog((prev) => [
-        ...prev,
-        { from: "bot", text: "❌ Something went wrong." },
-      ]);
+      if (requestGenerationRef.current === requestGeneration) {
+        setChatLog((prev) => [
+          ...prev,
+          { from: "bot", text: "Something went wrong. Please try again." },
+        ]);
+      }
     } finally {
-      setIsTyping(false);
-      stopTypingRef.current = false;
-
+      if (requestGenerationRef.current === requestGeneration) {
+        setIsThinking(false);
+        setIsTyping(false);
+        stopTypingRef.current = false;
+        if (abortRef.current === requestController) abortRef.current = null;
+      }
     }
 
+  };
+
+
+  const confirmDictation = async () => {
+    const dictatedText = input.trim();
+    await SpeechRecognition.stopListening();
+    resetTranscript();
+    if (dictatedText) await sendMessage(dictatedText);
   };
 
 
@@ -1035,16 +917,20 @@ function App() {
     const selected = chatTitles.find(c => c.id === chatId);
 
     if (selected) {
+      if (isTyping || isThinking || abortRef.current) handleStop();
+      const selectedModeId = getAssistantModeId(selected.assistantMode);
       setActiveChatId(chatId);
       setChatLog(selected.messages || []);
+      setAssistantModeId(selectedModeId);
+      localStorage.setItem("mindmate.assistantMode", selectedModeId);
 
       // load the correct saved title
       setFullTitle(selected.title || "");
       setTitleTyping("");
       setHasGeneratedTitle(true);
 
-      setShowWelcome(false);
       setShowMoodTracker(false);
+      if (window.matchMedia("(max-width: 768px)").matches) setSidebarOpen(false);
     }
   };
 
@@ -1052,23 +938,47 @@ function App() {
   // Login/logout handlers
   // Login button
   const handleGoogleLogin = async () => {
+    if (authSubmitting) return;
+
+    const previousLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const returnPath = getSafeReturnPath(location.state?.from);
+
     try {
-      if (/Mobi|Android/i.test(navigator.userAgent)) {
-        await signInWithRedirect(auth, provider);
-      } else {
-        const result = await signInWithPopup(auth, provider);
-        setUser(result.user);
-      }
-      navigate("/");   // ✅ redirect after login
+      setAuthSubmitting(true);
+      setAuthError("");
+      setIsGuest(false);
+      localStorage.removeItem("isGuest");
+
+      sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, "true");
+      sessionStorage.setItem(AUTH_RETURN_PATH_KEY, returnPath);
+
+      await prepareAuthSession();
+
+      // Firebase returns to the URL where redirect sign-in began. Starting from
+      // the SPA root also makes the callback resilient on static hosts.
+      window.history.replaceState(window.history.state, "", "/");
+      await signInWithRedirect(auth, provider);
     } catch (err) {
+      sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+      sessionStorage.removeItem(AUTH_RETURN_PATH_KEY);
+      window.history.replaceState(window.history.state, "", previousLocation);
+      setAuthSubmitting(false);
       console.error("Sign-in error:", err);
+      setAuthError(
+        err?.code === "auth/unauthorized-domain"
+          ? `Google login is not authorized for ${authRedirectDomain}.`
+          : err.message || "Google sign-in failed. Please try again."
+      );
     }
   };
 
   const handleGuestLogin = () => {
+    sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+    sessionStorage.removeItem(AUTH_RETURN_PATH_KEY);
+    setAuthError("");
+    setAuthSubmitting(false);
     setIsGuest(true);
     localStorage.setItem("isGuest", "true"); // ✅ persist
-    setShowWelcome(true);
     navigate("/");   // redirect guest to main screen
   };
 
@@ -1076,8 +986,10 @@ function App() {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
+      setAuthError("");
       setUser(null);
       setIsGuest(false);
+      localStorage.removeItem("isGuest");
     } catch (err) {
       console.error("Sign-out error:", err);
     }
@@ -1086,25 +998,19 @@ function App() {
 
 
   const handleDeleteChat = async (chatId) => {
-    if (chatId === activeChatId && !user) {
-      // 🟢 Guest temp chat: clear chat log
-      setChatLog([]);
-      setActiveChatId(null);
-      setHasGeneratedTitle(false);
-      setFullTitle("");
-      setTitleTyping("");
-      return;
-    }
+    if (!chatId || !chatTitles.some((chat) => chat.id === chatId)) return false;
+    if (!user?.uid) throw new Error("A signed-in session is required to delete a saved chat.");
 
+    // Stop work tied to the active document before removing it so a late AI
+    // response cannot attempt to write back into the deleted conversation.
+    if (chatId === activeChatId && (isTyping || isThinking)) handleStop();
 
     // Saved chat: delete from Firestore and state
-    if (user) {
-      try {
-        await deleteDoc(doc(db, "users", user.uid, "chats", chatId));
-      } catch (err) {
-        console.error("Failed to delete chat:", err);
-        return;
-      }
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "chats", chatId));
+    } catch (err) {
+      console.error("Failed to delete chat:", err);
+      throw new Error("The chat could not be deleted.", { cause: err });
     }
 
     setChatTitles((prev) => prev.filter((c) => c.id !== chatId));
@@ -1113,22 +1019,33 @@ function App() {
     if (activeChatId === chatId) {
       const remaining = chatTitles.filter((c) => c.id !== chatId);
       if (remaining.length) {
-        setActiveChatId(remaining[0].id);
-        setChatLog(remaining[0].messages || []);
+        const nextChat = remaining[0];
+        const nextModeId = getAssistantModeId(nextChat.assistantMode);
+        setActiveChatId(nextChat.id);
+        setChatLog(nextChat.messages || []);
+        setAssistantModeId(nextModeId);
+        localStorage.setItem("mindmate.assistantMode", nextModeId);
+        setFullTitle(nextChat.title || "");
+        setTitleTyping("");
+        setHasGeneratedTitle(true);
+        setShowChips(false);
       } else {
         setActiveChatId(null);
         setChatLog([]);
+        setFullTitle("");
+        setTitleTyping("");
+        setHasGeneratedTitle(false);
+        setShowChips(true);
       }
     }
+
+    return true;
   };
 
 
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareText, setShareText] = useState("");
   const [suggestionIndex, setSuggestionIndex] = useState(null); // index of disliked message
-  const [suggestion, setSuggestion] = useState(""); // store user suggestion
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [customFeedback, setCustomFeedback] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
 
@@ -1149,7 +1066,6 @@ function App() {
       setSuggestionIndex(index); // show suggestion tray
     } else {
       setSuggestionIndex(null); // hide tray
-      setSuggestion(""); // clear textarea
     }
   };
 
@@ -1173,19 +1089,24 @@ function App() {
     sendMessage(lastUserMsg.text);
   };
 
-  const handleMoreOptions = (index) => {
-    console.log("Show more options for message", index);
-    alert("More options coming soon — Report / Delete / Copy Link");
-  };
-
 
 
   // Show splash screen initially, then login or main chat UI
   if (showSplash) return <SplashScreen onFinish={() => setShowSplash(false)} />;
 
+  if (!authResolved) {
+    return (
+      <main className="auth-bootstrap" aria-live="polite" aria-busy="true">
+        <span className="auth-bootstrap__orb" aria-hidden="true" />
+        <p>Finishing secure sign-in…</p>
+      </main>
+    );
+  }
+
   return (
 
-    <Routes>
+    <Suspense fallback={<div className="route-loading" role="status"><span /><span /><span /></div>}>
+      <Routes>
       {/* Main Chat & UI */}
       <Route
         path="/"
@@ -1198,44 +1119,45 @@ function App() {
 
               <Sidebar
                 onNewChat={() => handleNewChat(false)}
-                onOpenMoodTracker={() => handleNewChat(true)}
-                chatTitles={mode1 === "doctor" ? doctorChats : displayedChats}
+                onOpenMoodTracker={() => {
+                  setShowMoodTracker(true);
+                  if (window.matchMedia("(max-width: 768px)").matches) setSidebarOpen(false);
+                }}
+                chatTitles={displayedChats}
                 onSelectChat={handleSelectChat}
                 activeChatId={activeChatId}
                 onDeleteChat={handleDeleteChat}
-                onOpenSearch={() => setShowSearchModal(true)}
+                onOpenSearch={() => {
+                  setShowSearchModal(true);
+                  if (window.matchMedia("(max-width: 768px)").matches) setSidebarOpen(false);
+                }}
                 onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-                onOpenJournaling={handleOpenJournaling}
+                sidebarOpen={sidebarOpen}
                 collapsed={collapsed}
                 onToggleCollapse={() => setCollapsed(!collapsed)}
                 goToPremium={goToPremium}
-                mode={mode1}
-                setMode={setMode2}
               />
             </div>
-
-
-            {/* ✅ Overlay for outside click */}
-            <div
-              className={`sidebar-overlay ${sidebarOpen ? "active" : ""}`}
-              onClick={handleCloseSidebar}
-            />
 
             <div className="main-area">
               <Topbar
                 user={user}
                 onLogout={handleSignOut}
                 goToPremium={goToPremium}
-                onToggleSidebar={toggleSidebar}
-                sidebarOpen={sidebarOpen}
                 onOpenSettings={() => setSettingsOpen(true)}
                 onLoginClick={() => navigate("/login")}
+                onToggleSidebar={() => setSidebarOpen((open) => !open)}
 
               />
               <SettingsModal
                 isOpen={isSettingsOpen}
                 onClose={() => setSettingsOpen(false)}
-                onLogout={() => console.log("Logout")}
+                onLogout={handleSignOut}
+                selectedVoice={selectedVoice}
+                voiceOptions={VOICE_OPTIONS}
+                onVoiceChange={handleVoiceChange}
+                autoSpeak={autoSpeak}
+                onAutoSpeakChange={handleAutoSpeakChange}
               />
               <SearchChatsModal
                 isOpen={showSearchModal}
@@ -1248,77 +1170,79 @@ function App() {
 
               <div className="chat-body" >
 
-                {!activeChatId && !showMoodTracker && chatLog.length === 0 && !showJournaling ? (
+                {showMoodTracker ? (
+                  <MoodTracker
+                    onSelectMood={handleMoodSelect}
+                    isGuest={isGuest}
+                    onClose={() => {
+                      setShowMoodTracker(false);
+                    }}
+                  />
+                ) : !activeChatId && chatLog.length === 0 ? (
                   <>
                     <Starfield />
-                    <WelcomeScreen user={user} mode={mode1} onStart={() => setShowWelcome(false)} />
+                    <WelcomeScreen user={user} mode={assistantModeId} />
                   </>
                 ) : (
                   <div className="chat-log" ref={chatBodyRef}>
 
                     {chatLog.map((msg, i) => {
-
-                      if (showJournaling && msg.type === "journal") {
-
-                        // Skip rendering journal entries here when journaling UI is open
-                        return null;
+                      if (msg.type === "mode-change") {
+                        return (
+                          <div key={i} className="chat-mode-transition">
+                            <span>{msg.text}</span>
+                          </div>
+                        );
                       }
+
                       const isBot = msg.from === "bot";
                       return (
                         <div key={i} className={`chat-row ${msg.from || "system"}`}>
-                          {msg.type === "journal" ? (
-
-                            <InChatJournaling key={i} initialEntry={msg} />
-
-                          ) : msg.image ? (
+                          {msg.image ? (
                             <img src={msg.image} alt="attached" className="chat-image" />
                           ) : (
                             <div
-                              className={`w-full my-3 ${isBot ? "text-left" : "text-right"
-                                }`}
+                              className={`message-block ${isBot ? "is-bot" : "is-user"}`}
                             >
                               <div
-                                className={`inline-block max-w-[80%] rounded-2xl px-4 py-3 shadow-md transition-all duration-200 ${isBot
-                                  ? "bg-[#2f2f2f] text-gray-100 prose prose-invert prose-p:my-2 prose-li:my-1 prose-ul:pl-5 prose-ol:pl-5"
-                                  : "bg-indigo-600 text-white self-end"
-                                  }`}
+                                className={`chat-message-bubble ${isBot ? "chat-message-bubble--bot" : "chat-message-bubble--user"}`}
                               >
                                 {isBot ? (
                                   <ReactMarkdown
                                     components={{
-                                      p: ({ node, ...props }) => (
-                                        <p className="my-2 leading-relaxed text-[15px]" {...props} />
+                                      p: (props) => (
+                                        <p className="chat-markdown-paragraph" {...omitMarkdownMetadata(props)} />
                                       ),
-                                      strong: ({ node, ...props }) => (
+                                      strong: (props) => (
                                         <strong
-                                          className="font-semibold text-yellow-300"
-                                          {...props}
+                                          className="chat-markdown-strong"
+                                          {...omitMarkdownMetadata(props)}
                                         />
                                       ),
-                                      ul: ({ node, ...props }) => (
+                                      ul: (props) => (
                                         <ul
-                                          className="list-disc pl-5 space-y-1 my-2 marker:text-white"
-                                          {...props}
+                                          className="chat-markdown-list chat-markdown-list--unordered"
+                                          {...omitMarkdownMetadata(props)}
                                         />
                                       ),
-                                      ol: ({ node, ...props }) => (
+                                      ol: (props) => (
                                         <ol
-                                          className="list-decimal pl-5 space-y-1 my-2 marker:text-white"
-                                          {...props}
+                                          className="chat-markdown-list chat-markdown-list--ordered"
+                                          {...omitMarkdownMetadata(props)}
                                         />
                                       ),
-                                      li: ({ node, ...props }) => (
-                                        <li className="leading-relaxed text-[15px]" {...props} />
+                                      li: (props) => (
+                                        <li className="chat-markdown-list-item" {...omitMarkdownMetadata(props)} />
                                       ),
-                                      code: ({ node, inline, ...props }) =>
-                                        inline ? (
+                                      code: (props) =>
+                                        props.inline ? (
                                           <code
-                                            className="px-1 py-0.5 rounded bg-gray-700 text-pink-300 text-sm"
-                                            {...props}
+                                            className="chat-markdown-inline-code"
+                                            {...omitMarkdownMetadata(props)}
                                           />
                                         ) : (
-                                          <pre className="p-3 my-2 rounded-lg bg-[#1e1e1e] overflow-x-auto">
-                                            <code className="text-sm text-green-400" {...props} />
+                                          <pre className="chat-markdown-code-block">
+                                            <code {...omitMarkdownMetadata(props)} />
                                           </pre>
                                         ),
                                     }}
@@ -1326,7 +1250,7 @@ function App() {
                                     {msg.text}
                                   </ReactMarkdown>
                                 ) : (
-                                  <p className="text-[15px] leading-relaxed">{msg.text}</p>
+                                  <p className="chat-message-text">{msg.text}</p>
                                 )}
                               </div>
                               {isBot && !msg.typing && (
@@ -1451,7 +1375,11 @@ function App() {
                                     {/* "More..." button */}
                                     <button
                                       className="feedback-option"
-                                      onClick={() => setShowFeedbackModal(true)}
+                                      onClick={() => {
+                                        setSuggestionIndex(null);
+                                        setSubmitted(true);
+                                        setTimeout(() => setSubmitted(false), 2000);
+                                      }}
                                     >
                                       More...
                                     </button>
@@ -1487,27 +1415,6 @@ function App() {
                               Thanks for your feedback! 💛
                             </div>
                           )}
-
-
-
-                          {msg.type === "moodPrompt" && (
-                            <div className="emoji-options">
-                              {["😀", "😢", "😡", "😌", "🤔", "😴", "🥰", "😎"].map(
-                                (emoji) => (
-                                  <span
-                                    key={emoji}
-                                    className="emoji-btn"
-                                    onClick={() => handleMoodSelect(emoji)}
-
-                                  >
-                                    {emoji}
-                                  </span>
-                                )
-
-                              )}
-                            </div>
-
-                          )}
                         </div>
                       );
                     })}
@@ -1521,21 +1428,10 @@ function App() {
                     </button>
                     {isThinking && (
                       <div className="chat-row bot">
-                        <div className="gemini-loader">
-                          <svg className="gemini-ring" viewBox="0 0 100 100">
-                            <circle
-                              ref={ringRef}
-                              cx="50"
-                              cy="50"
-                              r="34"
-                              fill="none"
-                              stroke="white"
-                              strokeWidth="2.5"
-                              strokeLinecap="round"
-                            />
-                          </svg>
-
-                          <img src={LOGO2} className="gemini-star" alt="thinking" />
+                        <div className="mindmate-thinking" role="status" aria-label="MindMate is thinking">
+                          <span />
+                          <span />
+                          <span />
                         </div>
                       </div>
                     )}
@@ -1644,10 +1540,10 @@ function App() {
               )}
 
               <div
-
-                className={`floating-input-bar ${showJournaling
-                  ? "hidden" // hide when journaling
-                  : !activeChatId && !showMoodTracker && chatLog.length === 0
+                ref={composerRef}
+                className={`floating-input-bar ${showMoodTracker
+                  ? "hidden"
+                  : !activeChatId && chatLog.length === 0
                     ? "welcome-mode"
                     : "chat-mode"
 
@@ -1655,16 +1551,40 @@ function App() {
 
               >
 
+                <AssistantModeSwitcher
+                  value={assistantModeId}
+                  onChange={handleAssistantModeChange}
+                  options={ASSISTANT_MODE_OPTIONS}
+                  disabled={isTyping || isThinking || listening || modeSaving}
+                  ariaLabel="Choose how MindMate should respond"
+                  className="composer-mode-switcher"
+                />
+
+                {showChips &&
+                  !activeChatId &&
+                  chatLog.length === 0 &&
+                  input.trim().length === 0 &&
+                  !showMoodTracker && (
+                    <div className="suggestions-below-input" role="group" aria-label="Suggested prompts">
+                      {assistantMode.suggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          className="suggestion-chip"
+                          onClick={() => sendMessage(suggestion)}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                 <div className="input-inner">
                   {!listening ? (
                     <>
                       <textarea
                         className="input-box"
-                        placeholder={
-                          mode1 === "doctor"
-                            ? "Describe your symptoms clearly…"
-                            : "Share anything🩷"
-                        }
+                        placeholder={assistantMode.placeholder}
                         value={input}
                         rows={1}
                         onChange={(e) => {
@@ -1694,34 +1614,9 @@ function App() {
 
                       {/* Your other buttons here */}
 
-                      {/* <button
+                       <button
                         className={`icon-btn mic-btn ${listening ? "active" : ""}`}
-                        onClick={() => {
-                          if (listening) {
-                            SpeechRecognition.stopListening();
-                          } else {
-                            resetTranscript();
-
-                            const SR =
-                              window.SpeechRecognition || window.webkitSpeechRecognition;
-
-                            if (!SR) {
-                              console.log("Speech recognition not supported");
-                              return;
-                            }
-
-                            // restart cleanly (fixes production issue)
-                            SpeechRecognition.stopListening();
-
-                            setTimeout(() => {
-                              SpeechRecognition.startListening({
-                                continuous: true,
-                                interimResults: true,
-                                language: "en-US",
-                              });
-                            }, 150);
-                          }
-                        }}
+                        onClick={startDictation}
                         title="Voice Input"
                         type="button"
                       >
@@ -1733,7 +1628,7 @@ function App() {
                             fill="none"
                           />
                         </svg>
-                      </button> */}
+                      </button>
                     </>
                   ) : (
                     <div className="dictation-mode">
@@ -1744,9 +1639,8 @@ function App() {
                       <div className="dictation-actions">
                         <button
                           className="tick-btn"
-                          onClick={() => {
-                            SpeechRecognition.stopListening();
-                          }}
+                          onClick={confirmDictation}
+                          type="button"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -1766,10 +1660,8 @@ function App() {
 
                         <button
                           className="cross-btn"
-                          onClick={() => {
-                            SpeechRecognition.stopListening();
-                            resetTranscript();
-                          }}
+                          onClick={cancelDictation}
+                          type="button"
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -1810,27 +1702,24 @@ function App() {
                           <rect x="6" y="6" width="12" height="12" />
                         </svg>
                       </button>
-                    // ) : input.trim() === "" ? (
-                    //   <button
-                    //     className="voice-model-button"
-                    //     onClick={() => setShowVoiceModal(true)}
-                    //     title="Select Voice Model"
-                    //     type="button"
-                    //     style={{ background: "transparent", border: "none", outline: "none", padding: 0, cursor: "pointer" }}
-                    //   >
-                    //     <div className="animated-bars">
-                    //       {bars.map((_, i) => (
-                    //         <span
-                    //           key={i}
-                    //           className="bar"
-                    //           style={{
-                    //             animationDelay: getRandomDelay(),
-                    //             animationDuration: getRandomDuration(),
-                    //           }}
-                    //         />
-                    //       ))}
-                    //     </div>
-                    //   </button>
+                    ) : input.trim() === "" ? (
+                      <button
+                        className={`voice-model-button ${voiceStarting ? "is-starting" : ""}`}
+                        onClick={startVoiceConversation}
+                        title={`Start voice conversation with ${selectedVoice.name}`}
+                        aria-label={`Start voice conversation with ${selectedVoice.name}`}
+                        disabled={voiceStarting}
+                        type="button"
+                      >
+                        <div className="animated-bars">
+                          {bars.map((_, i) => (
+                            <span
+                              key={i}
+                              className="bar"
+                            />
+                          ))}
+                        </div>
+                      </button>
 
                     ) : (
                       <button
@@ -1844,7 +1733,7 @@ function App() {
                           width="20"
                           height="20"
                           fill="black"
-                          xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
                         </svg>
@@ -1854,82 +1743,8 @@ function App() {
                     )}
                   </div>
                 </div>
+
               </div>
-
-              {!showJournaling &&
-                showWelcome &&
-                isGuest &&
-                showChips && (
-                  <div className="suggestions-below-input">
-                    {suggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        className="suggestion-chip"
-                        onClick={() => sendMessage(s)}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-
-              <SendButton isSpeaking={isSpeaking} onSend={sendMessage} onStop={handleStopSpeaking} />
-
-              {showVoiceModal && (
-                <div className="voice-modal-backdrop" onClick={() => setShowVoiceModal(false)}>
-                  <div className="voice-modal" onClick={(e) => e.stopPropagation()}>
-                    <h2 className="voice-modal-title">Choose a Voice</h2>
-                    <ul className="voice-list">
-                      {[
-                        { id: "mia", name: "Mia", desc: "Clear female voice" },
-                        { id: "aria", name: "Aria", desc: "Smooth assistant voice" },
-                        { id: "sofia", name: "Sofia", desc: "Friendly tone" },
-                        { id: "jason", name: "Jason", desc: "Neutral male voice" },
-                        { id: "leo", name: "Leo", desc: "Warm male voice" }
-                      ].map((v) => (
-                        <li
-                          key={v.id}
-                          className={`voice-item ${selectedVoice.id === v.id ? "active" : ""}`}
-                          onClick={() => {
-                            setSelectedVoice(v);
-                            setShowVoicePreview(true);
-                          }}
-                        >
-                          <div className="voice-name">{v.name}</div>
-                          <div className="voice-desc">{v.desc}</div>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {showVoicePreview && (
-                      <div className="voice-preview-actions">
-                        <button
-                          onClick={() => {
-                            setAutoSpeak(true); // Use selected voice in main chat
-                            setShowVoiceModal(false);
-                          }}
-                        >
-                          Use in Chat
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setPreviewListening(true);
-                            navigate("/voice");
-                          }}
-                        >
-                          Talk with {selectedVoice.name}
-                        </button>
-                      </div>
-                    )}
-
-
-
-                  </div>
-                </div>
-              )}
-
               {showLoginModal && (
                 <div className="modal-over">
                   <div className="modal-cont">
@@ -1981,6 +1796,8 @@ function App() {
           <LoginScreen
             onGoogleLogin={handleGoogleLogin}
             onGuestLogin={handleGuestLogin}
+            googleSubmitting={authSubmitting}
+            authError={authError}
           />
         }
       />
@@ -1989,21 +1806,18 @@ function App() {
         path="/voice"
         element={
           <VoiceCloud
-            assistantVolume={assistantVolume}
-            speakWithRiva={speakWithRiva}
+            selectedVoice={selectedVoice}
+            voiceOptions={VOICE_OPTIONS}
+            onVoiceChange={handleVoiceChange}
+            assistantModeId={assistantModeId}
           />
         }
       />
-      <Route path="/goals" element={<GoalsPage />} />
-      <Route path="/journals" element={<JournalChatScreen />} />
-      <Route path="/medical-summary" element={<MedicalSummary />} />
-      <Route path="/nearby-doctors" element={<NearbyDoctors />} />
-      <Route path="/appointments" element={<Appointments />} />
-      <Route path="/health-reports" element={<HealthReports />} />
-
-
-
-    </Routes >
+      <Route path="/goals" element={<GoalsPage assistantModeId={assistantModeId} />} />
+      <Route path="/journals" element={<JournalChatScreen user={user} isGuest={isGuest} />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
 
   );
 

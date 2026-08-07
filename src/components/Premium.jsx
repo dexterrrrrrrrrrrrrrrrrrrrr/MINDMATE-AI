@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import { CheckCircle } from "lucide-react";
 import "../styles/Premium.css";
 import { useEffect, useState } from "react";
@@ -6,26 +6,42 @@ import { useEffect, useState } from "react";
 const Premium = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
+  const [checkoutReady, setCheckoutReady] = useState(Boolean(window.Razorpay));
+  const paymentKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
-  // Load Razorpay script only once
   useEffect(() => {
+    if (!paymentKey || window.Razorpay) {
+      setCheckoutReady(Boolean(window.Razorpay));
+      return undefined;
+    }
+
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
+    script.onload = () => setCheckoutReady(true);
+    script.onerror = () => setCheckoutReady(false);
     document.body.appendChild(script);
-  }, []);
+    return () => {
+      script.onload = null;
+      script.onerror = null;
+    };
+  }, [paymentKey]);
 
-  // Payment Handler
   const handlePayment = (amount, planName) => {
+    if (!paymentKey || !checkoutReady || !window.Razorpay) {
+      setModalMessage("Secure checkout is not configured right now. Please try again later.");
+      setIsModalOpen(true);
+      return;
+    }
+
     const options = {
-      key: "YOUR_RAZORPAY_KEY", // Replace with your Razorpay Key
+      key: paymentKey,
       amount: amount * 100,
       currency: "INR",
       name: "MindMate",
       description: planName,
-      handler: function (response) {
-        console.log(response);
-        setModalMessage("Payment Successful! 🎉 Thank you for upgrading.");
+      handler: function () {
+        setModalMessage("Payment received. Thank you for upgrading to MindMate Pro.");
         setIsModalOpen(true);
       },
       theme: {
@@ -34,6 +50,10 @@ const Premium = () => {
     };
 
     const rzp = new window.Razorpay(options);
+    rzp.on("payment.failed", () => {
+      setModalMessage("The payment could not be completed. No plan changes were made.");
+      setIsModalOpen(true);
+    });
     rzp.open();
   };
 
@@ -66,7 +86,7 @@ const Premium = () => {
     },
     {
       title: "Pro+ (Yearly)",
-      price: "₹3999/year",
+      price: "₹3,999/year",
       features: [
         "All Pro features",
         "Emotional check-ins & random therapy prompts",
@@ -84,20 +104,20 @@ const Premium = () => {
 
   return (
     <div className="premium-page">
-      <motion.h1
+      <Motion.h1
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="premium-title"
       >
         MindMate Pro
-      </motion.h1>
+      </Motion.h1>
 
       <p className="premium-sub">Unlock the full potential with Pro plans</p>
 
       <div className="plans-container">
         {plans.map((plan, idx) => (
-          <motion.div
+          <Motion.div
             key={idx}
             className="plan-card glass-card"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -122,14 +142,14 @@ const Premium = () => {
                 } else if (plan.title === "Pro+ (Yearly)") {
                   handlePayment(3999, "Pro+ Yearly");
                 } else {
-                  setModalMessage("You’re already on Free Plan 🎉");
+                  setModalMessage("You are already on the Free plan.");
                   setIsModalOpen(true);
                 }
               }}
             >
               {plan.button}
             </button>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
