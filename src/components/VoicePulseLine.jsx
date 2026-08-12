@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import "../styles/VoicePulseLine.css";
 
-const BAR_COUNT = 28;
-const MIN_BAR_HEIGHT = 2.5;
+const DOT_SIZE = 1.15;
+const DOT_STEP = 4;
 
 const VoicePulseLine = ({ isListening, stream }) => {
   const canvasRef = useRef(null);
@@ -17,10 +17,11 @@ const VoicePulseLine = ({ isListening, stream }) => {
     let analyser;
     let microphoneSource;
     let frequencyData;
+    let timeDomainData;
     let resizeObserver;
     let disposed = false;
     let smoothedLevel = 0;
-    const barLevels = Array.from({ length: BAR_COUNT }, () => 0);
+    const barLevels = [];
 
     const resizeCanvas = () => {
       const { width, height } = canvas.getBoundingClientRect();
@@ -35,56 +36,70 @@ const VoicePulseLine = ({ isListening, stream }) => {
       context.clearRect(0, 0, width, height);
 
       let liveLevel = 0;
-      if (isListening && analyser && frequencyData) {
+      if (isListening && analyser && frequencyData && timeDomainData) {
+        analyser.getByteTimeDomainData(timeDomainData);
         analyser.getByteFrequencyData(frequencyData);
-        const voiceBins = Math.min(frequencyData.length, 48);
         let energy = 0;
 
-        for (let index = 2; index < voiceBins; index += 1) {
-          const normalized = frequencyData[index] / 255;
-          energy += normalized * normalized;
+        for (let index = 0; index < timeDomainData.length; index += 1) {
+          const sample = (timeDomainData[index] - 128) / 128;
+          energy += sample * sample;
         }
 
-        const rms = Math.sqrt(energy / Math.max(1, voiceBins - 2));
-        // Lift normal speaking into a clearly visible range while keeping room
-        // for loud speech to produce taller peaks.
-        liveLevel = Math.min(1, Math.max(0, (rms - 0.025) * 3.4));
+        const rms = Math.sqrt(energy / timeDomainData.length);
+        const gatedLevel = Math.max(0, rms - 0.018);
+        // A gentle noise gate preserves the idle dot line. The curved boost
+        // makes normal speech rise decisively without clipping louder voices.
+        liveLevel = Math.min(1, Math.pow(gatedLevel * 12, 0.72));
       }
 
-      const smoothing = liveLevel > smoothedLevel ? 0.42 : 0.14;
+      const smoothing = liveLevel > smoothedLevel ? 0.56 : 0.12;
       smoothedLevel += (liveLevel - smoothedLevel) * smoothing;
+      if (smoothedLevel < 0.018) smoothedLevel = 0;
 
-      const gap = Math.max(2.5, Math.min(4, width / 94));
-      const barWidth = Math.max(2, (width - gap * (BAR_COUNT - 1)) / BAR_COUNT);
-      const maxBarHeight = Math.max(MIN_BAR_HEIGHT, height - 5);
-      const middle = (BAR_COUNT - 1) / 2;
+      const dotSize = DOT_SIZE;
+      const barCount = Math.max(12, Math.floor((width - dotSize) / DOT_STEP) + 1);
+      while (barLevels.length < barCount) barLevels.push(0);
+      if (barLevels.length > barCount) barLevels.length = barCount;
+      const step = (width - dotSize) / (barCount - 1);
+      const maxBarHeight = Math.max(dotSize, height - 4);
+      const middle = (barCount - 1) / 2;
+      const activeLevel = smoothedLevel > 0.045
+        ? Math.min(1, (smoothedLevel - 0.035) / 0.965)
+        : 0;
 
-      for (let index = 0; index < BAR_COUNT; index += 1) {
+      for (let index = 0; index < barCount; index += 1) {
         const mirroredDistance = Math.abs(index - middle) / middle;
-        const centerShape = 0.48 + (1 - mirroredDistance) * 0.52;
+        const centerShape = 0.58 + (1 - mirroredDistance) * 0.42;
         const spectrumIndex = analyser && frequencyData
-          ? Math.min(frequencyData.length - 1, 2 + Math.floor(index * 1.35))
+          ? Math.min(frequencyData.length - 1, 2 + Math.floor((index / (barCount - 1)) * 46))
           : 0;
         const spectrum = frequencyData ? frequencyData[spectrumIndex] / 255 : 0;
-        const organicPeak = 0.74 + 0.26 * Math.sin(index * 1.9 + performance.now() * 0.004);
-        const target = isListening
-          ? Math.min(1, smoothedLevel * centerShape * organicPeak + spectrum * 0.42)
+        const organicPeak = 0.82 + 0.18 * Math.sin(index * 1.73 + performance.now() * 0.006);
+        const boostedLevel = Math.pow(activeLevel, 0.68);
+        const target = isListening && activeLevel > 0
+          ? Math.min(1, boostedLevel * centerShape * organicPeak * (0.9 + spectrum * 0.52))
           : 0;
-        const barSmoothing = target > barLevels[index] ? 0.5 : 0.16;
+        const barSmoothing = target > barLevels[index] ? 0.58 : 0.14;
         barLevels[index] += (target - barLevels[index]) * barSmoothing;
+        if (target === 0 && barLevels[index] < 0.012) barLevels[index] = 0;
 
-        const barHeight = MIN_BAR_HEIGHT + barLevels[index] * (maxBarHeight - MIN_BAR_HEIGHT);
-        const x = index * (barWidth + gap);
+        const barHeight = dotSize + barLevels[index] * (maxBarHeight - dotSize);
+        const centerX = dotSize / 2 + index * step;
+        const x = centerX - dotSize / 2;
         const y = (height - barHeight) / 2;
-        const radius = Math.min(barWidth / 2, barHeight / 2);
+        const radius = dotSize / 2;
 
         context.beginPath();
-        context.fillStyle = `rgba(255, 255, 255, ${0.5 + barLevels[index] * 0.5})`;
-        if (typeof context.roundRect === "function") {
-          context.roundRect(x, y, barWidth, barHeight, radius);
+        context.fillStyle = `rgba(255, 255, 255, ${0.31 + barLevels[index] * 0.69})`;
+        if (barLevels[index] === 0) {
+          context.arc(centerX, height / 2, radius, 0, Math.PI * 2);
+          context.fill();
+        } else if (typeof context.roundRect === "function") {
+          context.roundRect(x, y, dotSize, barHeight, radius);
           context.fill();
         } else {
-          context.fillRect(x, y, barWidth, barHeight);
+          context.fillRect(x, y, dotSize, barHeight);
         }
       }
 
@@ -113,6 +128,7 @@ const VoicePulseLine = ({ isListening, stream }) => {
         analyser.maxDecibels = -18;
         analyser.smoothingTimeConstant = 0.72;
         frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        timeDomainData = new Uint8Array(analyser.fftSize);
         microphoneSource = audioContext.createMediaStreamSource(stream);
         microphoneSource.connect(analyser);
 

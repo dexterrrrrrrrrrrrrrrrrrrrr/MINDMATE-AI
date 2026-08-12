@@ -529,11 +529,12 @@ textarea {
   width: 100%;
   height: var(--mindmate-viewport-height, 100dvh);
   position: fixed;
-  top: var(--mindmate-viewport-offset-top, 0px);
+  top: 0;
   right: 0;
   left: 0;
   overflow: hidden;
   overflow: clip;
+  transform: translate3d(0, var(--mindmate-viewport-offset-top, 0px), 0);
   isolation: isolate;
   perspective: 1200px;
   --mm-mode-rgb: 224, 163, 219;
@@ -1669,6 +1670,14 @@ body[data-theme="aurora"] {
   transform: translateY(-1px) translateZ(14px);
 }
 
+.input-inner.input-inner--dictating {
+  min-height: 50px;
+  padding: 3px 6px 3px 14px;
+  gap: 8px;
+  border-radius: 20px;
+  background: rgba(30, 30, 31, 0.94);
+}
+
 .floating-input-bar.welcome-mode {
   position: sticky;
   bottom: auto;
@@ -1993,26 +2002,57 @@ body[data-theme="aurora"] {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-width: 0;
+  gap: 10px;
+}
+
+.dictation-timer {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .dictation-actions {
   display: flex;
-  gap: 12px;
-  margin-left: 12px;
+  align-items: center;
+  gap: 8px;
+  margin-left: 0;
 }
 
 .tick-btn,
 .cross-btn {
-  background: transparent;
   border: none;
-  padding: 10px;
+  padding: 0;
   border-radius: 50%;
-  font-size: 18px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
   cursor: pointer;
-  color: white;
-  transition: 0.2s ease;
+  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 
+.cross-btn {
+  width: 36px;
+  height: 36px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.tick-btn {
+  width: 38px;
+  height: 38px;
+  color: #17181b;
+  background: #f8f8f7;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cross-btn:hover { background: rgba(255, 255, 255, 0.11); }
+  .tick-btn:hover { transform: translateY(-1px); background: #ffffff; }
+}
 
 .profile-container {
   position: relative;
@@ -3663,21 +3703,23 @@ button {
   }
 
   .floating-input-bar.chat-mode {
-    bottom: 0;
+    bottom: var(--mindmate-keyboard-inset, 0px);
     width: 100%;
     padding: 9px 9px calc(9px + env(safe-area-inset-bottom));
     background: linear-gradient(to top, rgba(6, 7, 11, 0.92) 60%, transparent);
+    transition: none;
   }
 
   .floating-input-bar.welcome-mode {
     top: auto;
-    bottom: calc(22px + env(safe-area-inset-bottom));
+    bottom: calc(22px + env(safe-area-inset-bottom) + var(--mindmate-keyboard-inset, 0px));
     width: 100%;
     max-width: none;
     padding: 0 10px;
     flex-direction: column;
     gap: 9px;
     transform: translateX(-50%);
+    transition: none;
   }
 
   .input-inner {
@@ -3743,24 +3785,13 @@ button {
     bottom: calc(var(--mindmate-composer-height, 140px) + 12px);
   }
 
-  html[data-keyboard-open="true"] .topbar {
-    height: 58px;
-    padding-block: 8px;
-    grid-template-rows: 42px;
+  html[data-keyboard-open="true"] .scroll-to-bottom-btn {
+    opacity: 0;
+    pointer-events: none;
   }
 
-  html[data-keyboard-open="true"] .topbar-mode-slot,
-  html[data-keyboard-open="true"] .welcome-container,
   html[data-keyboard-open="true"] .floating-input-bar.welcome-mode .suggestions-below-input {
     display: none;
-  }
-
-  html[data-keyboard-open="true"] .chat-log {
-    padding-top: 70px;
-  }
-
-  html[data-keyboard-open="true"] .floating-input-bar.welcome-mode {
-    bottom: max(8px, env(safe-area-inset-bottom));
   }
 }
 

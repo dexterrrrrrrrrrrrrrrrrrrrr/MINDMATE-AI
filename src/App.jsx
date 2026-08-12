@@ -15,6 +15,8 @@ import {
   Share2,
   RefreshCcw,
   Volume2,
+  ArrowUp,
+  Square,
 } from "lucide-react";
 import SearchChatsModal from "./components/SearchChatsModal";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
@@ -76,6 +78,12 @@ const getSafeReturnPath = (path) => (
     ? path
     : "/"
 );
+
+const formatDictationTime = (seconds) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = String(seconds % 60).padStart(2, "0");
+  return `${minutes}:${remainingSeconds}`;
+};
 
 const mapFirebaseUser = (firebaseUser) => firebaseUser
   ? {
@@ -173,6 +181,7 @@ function App() {
   const dictationSessionRef = useRef(0);
   const dictationStreamRef = useRef(null);
   const [dictationStream, setDictationStream] = useState(null);
+  const [dictationElapsed, setDictationElapsed] = useState(0);
 
   const [selectedVoice, setSelectedVoice] = useState(getStoredVoice);
   const [voiceStarting, setVoiceStarting] = useState(false);
@@ -201,6 +210,7 @@ function App() {
     const dictationSession = dictationSessionRef.current + 1;
     dictationSessionRef.current = dictationSession;
     inputBeforeDictationRef.current = input;
+    setDictationElapsed(0);
     resetTranscript();
 
     try {
@@ -227,23 +237,24 @@ function App() {
       dictationStreamRef.current?.getTracks().forEach((track) => track.stop());
       dictationStreamRef.current = null;
       setDictationStream(null);
+      setDictationElapsed(0);
       window.alert(getMicrophoneErrorMessage(error));
     } finally {
       dictationStartingRef.current = false;
     }
   };
 
-  const cancelDictation = async () => {
+  const stopDictation = async () => {
     dictationSessionRef.current += 1;
     dictationStreamRef.current?.getTracks().forEach((track) => track.stop());
     dictationStreamRef.current = null;
     setDictationStream(null);
+    setDictationElapsed(0);
 
     try {
-      await SpeechRecognition.abortListening();
+      await SpeechRecognition.stopListening();
     } finally {
       resetTranscript();
-      setInput(inputBeforeDictationRef.current);
     }
   };
 
@@ -506,6 +517,19 @@ function App() {
   }, [listening]);
 
   useEffect(() => {
+    if (!listening || !dictationStream) return undefined;
+
+    const startedAt = Date.now();
+    const updateElapsed = () => {
+      setDictationElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    };
+    const interval = window.setInterval(updateElapsed, 250);
+    updateElapsed();
+
+    return () => window.clearInterval(interval);
+  }, [dictationStream, listening]);
+
+  useEffect(() => {
     if (location.pathname !== "/" && dictationStreamRef.current) {
       dictationSessionRef.current += 1;
       dictationStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -635,16 +659,34 @@ function App() {
       visualViewport?.height || 0
     );
     let previousWidth = window.innerWidth;
+    let frozenChatScrollTop = null;
+    let freezeChatUntil = 0;
 
     root.classList.add("mindmate-chat-route");
     body.classList.add("mindmate-chat-route");
     window.scrollTo(0, 0);
 
+    const handleFocusIn = (event) => {
+      if (!event.target?.classList?.contains("input-box")) return;
+      frozenChatScrollTop = chatBodyRef.current?.scrollTop ?? null;
+      freezeChatUntil = performance.now() + 800;
+      updateViewport();
+    };
+
+    const handleFocusOut = (event) => {
+      if (!event.target?.classList?.contains("input-box")) return;
+      freezeChatUntil = performance.now() + 500;
+      updateViewport();
+    };
+
     const updateViewport = () => {
       window.cancelAnimationFrame(animationFrame);
       animationFrame = window.requestAnimationFrame(() => {
         const viewportHeight = Math.round(visualViewport?.height || window.innerHeight);
-        const viewportTop = Math.round(visualViewport?.offsetTop || 0);
+        const viewportTop = Math.round(Math.max(
+          visualViewport?.offsetTop || 0,
+          (visualViewport?.pageTop || 0) - window.scrollY
+        ));
         const currentWidth = window.innerWidth;
 
         // A meaningful width change is an orientation/layout change. Height-only
@@ -657,14 +699,17 @@ function App() {
           stableViewportHeight = Math.max(stableViewportHeight, window.innerHeight, viewportHeight);
         }
 
+        const keyboardInset = Math.max(0, stableViewportHeight - viewportHeight);
+        const composerFocused = document.activeElement?.classList?.contains("input-box");
         const keyboardOpen = window.matchMedia("(max-width: 768px)").matches
-          && stableViewportHeight - viewportHeight > 120;
-        const chatScroller = chatBodyRef.current;
-        const wasNearBottom = chatScroller
-          ? chatScroller.scrollHeight - chatScroller.scrollTop - chatScroller.clientHeight < 160
-          : false;
+          && keyboardInset > 120;
 
-        root.style.setProperty("--mindmate-viewport-height", `${viewportHeight}px`);
+        // Keep the app shell at its pre-keyboard height. Only the composer is
+        // lifted by the obscured portion of the viewport, so focusing the input
+        // cannot resize or scroll the conversation itself.
+        root.style.setProperty("--mindmate-viewport-height", `${stableViewportHeight}px`);
+        root.style.setProperty("--mindmate-visible-height", `${viewportHeight}px`);
+        root.style.setProperty("--mindmate-keyboard-inset", `${composerFocused ? keyboardInset : 0}px`);
         root.style.setProperty("--mindmate-viewport-offset-top", `${viewportTop}px`);
         root.style.setProperty("--vh", `${viewportHeight * 0.01}px`);
         root.dataset.keyboardOpen = keyboardOpen ? "true" : "false";
@@ -677,9 +722,12 @@ function App() {
             appShell.scrollLeft = 0;
           }
 
-          if (wasNearBottom && chatBodyRef.current) {
-            chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
-            setUserScrolledUp(false);
+          if (
+            frozenChatScrollTop !== null
+            && performance.now() <= freezeChatUntil
+            && chatBodyRef.current
+          ) {
+            chatBodyRef.current.scrollTop = frozenChatScrollTop;
           }
         });
       });
@@ -689,6 +737,8 @@ function App() {
     visualViewport?.addEventListener("scroll", updateViewport);
     window.addEventListener("resize", updateViewport);
     window.addEventListener("orientationchange", updateViewport);
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
     updateViewport();
 
     return () => {
@@ -698,10 +748,14 @@ function App() {
       visualViewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);
       window.removeEventListener("orientationchange", updateViewport);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
       root.classList.remove("mindmate-chat-route");
       body.classList.remove("mindmate-chat-route");
       delete root.dataset.keyboardOpen;
       root.style.removeProperty("--mindmate-viewport-height");
+      root.style.removeProperty("--mindmate-visible-height");
+      root.style.removeProperty("--mindmate-keyboard-inset");
       root.style.removeProperty("--mindmate-viewport-offset-top");
       root.style.removeProperty("--vh");
     };
@@ -1033,6 +1087,7 @@ function App() {
     dictationStreamRef.current?.getTracks().forEach((track) => track.stop());
     dictationStreamRef.current = null;
     setDictationStream(null);
+    setDictationElapsed(0);
 
     try {
       await SpeechRecognition.stopListening();
@@ -1695,6 +1750,7 @@ function App() {
                   !activeChatId &&
                   chatLog.length === 0 &&
                   input.trim().length === 0 &&
+                  !listening &&
                   !showMoodTracker && (
                     <div className="suggestions-below-input" role="group" aria-label="Suggested prompts">
                       {assistantMode.suggestions.map((suggestion) => (
@@ -1710,7 +1766,7 @@ function App() {
                     </div>
                   )}
 
-                <div className="input-inner">
+                <div className={`input-inner ${listening ? "input-inner--dictating" : ""}`}>
                   {!listening ? (
                     <>
                       <textarea
@@ -1758,59 +1814,40 @@ function App() {
                     </>
                   ) : (
                     <div className="dictation-mode">
-                      {/* waveform */}
                       <VoicePulseLine isListening={listening} stream={dictationStream} />
-
-
+                      <time
+                        className="dictation-timer"
+                        dateTime={`PT${dictationElapsed}S`}
+                        aria-label={`${dictationElapsed} seconds recorded`}
+                      >
+                        {formatDictationTime(dictationElapsed)}
+                      </time>
                       <div className="dictation-actions">
                         <button
-                          className="tick-btn"
-                          onClick={confirmDictation}
+                          className="cross-btn"
+                          onClick={stopDictation}
+                          title="Stop dictation"
+                          aria-label="Stop dictation"
                           type="button"
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="icon"
-                            viewBox="0 0 24 24"
-                            width="22"
-                            height="22"
-                            fill="none"
-                            stroke="white"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
+                          <Square size={12} fill="currentColor" strokeWidth={0} aria-hidden="true" />
                         </button>
 
                         <button
-                          className="cross-btn"
-                          onClick={cancelDictation}
+                          className="tick-btn"
+                          onClick={confirmDictation}
+                          title="Send dictation"
+                          aria-label="Send dictation"
                           type="button"
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="icon"
-                            viewBox="0 0 24 24"
-                            width="22"
-                            height="22"
-                            fill="none"
-                            stroke="white"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
+                          <ArrowUp size={22} strokeWidth={2.25} aria-hidden="true" />
                         </button>
                       </div>
                     </div>
                   )
 
                   }
-                  <div className="button-container">
+                  {!listening && <div className="button-container">
                     {isTyping ? (
                       <button
                         className="stop-button"
@@ -1867,7 +1904,7 @@ function App() {
 
 
                     )}
-                  </div>
+                  </div>}
                 </div>
 
               </div>
