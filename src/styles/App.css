@@ -527,9 +527,13 @@ textarea {
 .chatgpt-wrapper {
   display: flex;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
-  position: relative;
+  height: var(--mindmate-viewport-height, 100dvh);
+  position: fixed;
+  top: var(--mindmate-viewport-offset-top, 0px);
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  overflow: clip;
   isolation: isolate;
   perspective: 1200px;
   --mm-mode-rgb: 224, 163, 219;
@@ -1316,7 +1320,8 @@ body[data-theme="aurora"] {
   position: relative;
   flex: 1;
   width: 100%;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1337,14 +1342,14 @@ body[data-theme="aurora"] {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow-y: auto;
-  /* change this */
+  overflow: hidden;
   align-items: center;
 }
 
 
 .chat-log {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 100px 20px calc(var(--mindmate-composer-height, 112px) + 28px) 20px;
   display: flex;
@@ -1357,6 +1362,9 @@ body[data-theme="aurora"] {
   width: 100%;
   ;
   margin: 0 auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  overflow-anchor: none;
 
 }
 
@@ -3508,19 +3516,24 @@ button {
   .chatgpt-wrapper,
   .main-area {
     width: 100%;
-    height: 100dvh;
-    min-height: 100dvh;
+    min-height: 0;
   }
 
   .chatgpt-wrapper {
+    height: var(--mindmate-viewport-height, 100dvh);
     overflow: hidden;
+    overflow: clip;
+  }
+
+  .main-area {
+    height: 100%;
   }
 
   .sidebar-container {
     position: fixed;
     inset: 0;
     width: 100%;
-    height: 100dvh;
+    height: 100%;
     z-index: 1200;
     pointer-events: none;
   }
@@ -3532,7 +3545,7 @@ button {
     inset: 0 auto 0 0;
     width: min(84vw, 310px);
     max-width: 310px;
-    height: 100dvh;
+    height: 100%;
     padding: 14px;
     align-items: stretch;
     transform: translateX(-105%);
@@ -3729,6 +3742,50 @@ button {
   .scroll-to-bottom-btn {
     bottom: calc(var(--mindmate-composer-height, 140px) + 12px);
   }
+
+  html[data-keyboard-open="true"] .topbar {
+    height: 58px;
+    padding-block: 8px;
+    grid-template-rows: 42px;
+  }
+
+  html[data-keyboard-open="true"] .topbar-mode-slot,
+  html[data-keyboard-open="true"] .welcome-container,
+  html[data-keyboard-open="true"] .floating-input-bar.welcome-mode .suggestions-below-input {
+    display: none;
+  }
+
+  html[data-keyboard-open="true"] .chat-log {
+    padding-top: 70px;
+  }
+
+  html[data-keyboard-open="true"] .floating-input-bar.welcome-mode {
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
+}
+
+html.mindmate-chat-route,
+body.mindmate-chat-route,
+body.mindmate-chat-route #root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body.mindmate-chat-route {
+  position: fixed;
+  inset: 0;
+}
+
+body.mindmate-chat-route .chat-log,
+body.mindmate-chat-route .input-box {
+  touch-action: pan-y;
+}
+
+body.mindmate-chat-route .suggestions-below-input {
+  touch-action: pan-x;
 }
 
 @media (max-width: 520px) {

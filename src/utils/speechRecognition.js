@@ -22,7 +22,7 @@ export const getMicrophoneErrorMessage = (error) => {
   return error?.message || "Unable to access the microphone. Please try again.";
 };
 
-export const requestMicrophonePermission = async () => {
+export const openMicrophoneStream = async () => {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Microphone input is not supported in this browser.");
   }
@@ -31,11 +31,15 @@ export const requestMicrophonePermission = async () => {
     throw new DOMException("Microphone access requires HTTPS.", "SecurityError");
   }
 
-  // Resolve permission from the click gesture before starting Web Speech. This
-  // prevents the first attempt being consumed by the permission prompt.
-  const permissionStream = await navigator.mediaDevices.getUserMedia({
+  return navigator.mediaDevices.getUserMedia({
     audio: microphoneConstraints,
   });
+};
+
+export const requestMicrophonePermission = async () => {
+  // Resolve permission from the click gesture before starting Web Speech. This
+  // prevents the first attempt being consumed by the permission prompt.
+  const permissionStream = await openMicrophoneStream();
 
   permissionStream.getTracks().forEach((track) => track.stop());
 };

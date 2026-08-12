@@ -50,8 +50,8 @@ import Starfield from "./components/Starfield";
 import { generateTitleFromText } from "./components/AutoTitleGenerator";
 import {
   getMicrophoneErrorMessage,
+  openMicrophoneStream,
   requestMicrophonePermission,
-  startSpeechListening,
 } from "./utils/speechRecognition";
 import { AI_API_URL, AI_AUDIO_URL, AI_CONVERSATION_URL } from "./config";
 import { getStoredVoice, VOICE_OPTIONS } from "./constants/voices";
@@ -168,9 +168,11 @@ function App() {
   } = useSpeechRecognition({
     clearTranscriptOnListen: true
   });
-  const currentVolume = listening ? 0.22 : 0;
   const dictationStartingRef = useRef(false);
   const inputBeforeDictationRef = useRef("");
+  const dictationSessionRef = useRef(0);
+  const dictationStreamRef = useRef(null);
+  const [dictationStream, setDictationStream] = useState(null);
 
   const [selectedVoice, setSelectedVoice] = useState(getStoredVoice);
   const [voiceStarting, setVoiceStarting] = useState(false);
@@ -196,16 +198,35 @@ function App() {
     }
 
     dictationStartingRef.current = true;
+    const dictationSession = dictationSessionRef.current + 1;
+    dictationSessionRef.current = dictationSession;
     inputBeforeDictationRef.current = input;
     resetTranscript();
 
     try {
-      await startSpeechListening({
+      const stream = await openMicrophoneStream();
+      if (dictationSession !== dictationSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      dictationStreamRef.current = stream;
+      setDictationStream(stream);
+      stream.getAudioTracks()[0]?.addEventListener("ended", () => {
+        if (dictationStreamRef.current === stream) {
+          dictationStreamRef.current = null;
+          setDictationStream(null);
+        }
+      }, { once: true });
+      await SpeechRecognition.startListening({
         continuous: true,
         interimResults: true,
         language: "en-US",
       });
     } catch (error) {
+      dictationStreamRef.current?.getTracks().forEach((track) => track.stop());
+      dictationStreamRef.current = null;
+      setDictationStream(null);
       window.alert(getMicrophoneErrorMessage(error));
     } finally {
       dictationStartingRef.current = false;
@@ -213,9 +234,17 @@ function App() {
   };
 
   const cancelDictation = async () => {
-    await SpeechRecognition.abortListening();
-    resetTranscript();
-    setInput(inputBeforeDictationRef.current);
+    dictationSessionRef.current += 1;
+    dictationStreamRef.current?.getTracks().forEach((track) => track.stop());
+    dictationStreamRef.current = null;
+    setDictationStream(null);
+
+    try {
+      await SpeechRecognition.abortListening();
+    } finally {
+      resetTranscript();
+      setInput(inputBeforeDictationRef.current);
+    }
   };
 
   const startVoiceConversation = async () => {
@@ -469,6 +498,29 @@ function App() {
   }, [location.pathname, transcript]);
 
   useEffect(() => {
+    if (!listening && !dictationStartingRef.current && dictationStreamRef.current) {
+      dictationStreamRef.current.getTracks().forEach((track) => track.stop());
+      dictationStreamRef.current = null;
+      setDictationStream(null);
+    }
+  }, [listening]);
+
+  useEffect(() => {
+    if (location.pathname !== "/" && dictationStreamRef.current) {
+      dictationSessionRef.current += 1;
+      dictationStreamRef.current.getTracks().forEach((track) => track.stop());
+      dictationStreamRef.current = null;
+      setDictationStream(null);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => () => {
+    dictationSessionRef.current += 1;
+    dictationStreamRef.current?.getTracks().forEach((track) => track.stop());
+    dictationStreamRef.current = null;
+  }, []);
+
+  useEffect(() => {
     let active = true;
     let authStateReady = false;
     let redirectReady = false;
@@ -571,18 +623,89 @@ function App() {
 
 
   useEffect(() => {
-    const setVh = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    if (location.pathname !== "/") return undefined;
+
+    const root = document.documentElement;
+    const body = document.body;
+    const visualViewport = window.visualViewport;
+    let animationFrame = 0;
+    let followUpFrame = 0;
+    let stableViewportHeight = Math.max(
+      window.innerHeight,
+      visualViewport?.height || 0
+    );
+    let previousWidth = window.innerWidth;
+
+    root.classList.add("mindmate-chat-route");
+    body.classList.add("mindmate-chat-route");
+    window.scrollTo(0, 0);
+
+    const updateViewport = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const viewportHeight = Math.round(visualViewport?.height || window.innerHeight);
+        const viewportTop = Math.round(visualViewport?.offsetTop || 0);
+        const currentWidth = window.innerWidth;
+
+        // A meaningful width change is an orientation/layout change. Height-only
+        // changes are usually the mobile keyboard, so retain the pre-keyboard
+        // height as our comparison baseline.
+        if (Math.abs(currentWidth - previousWidth) > 48) {
+          stableViewportHeight = Math.max(window.innerHeight, viewportHeight);
+          previousWidth = currentWidth;
+        } else {
+          stableViewportHeight = Math.max(stableViewportHeight, window.innerHeight, viewportHeight);
+        }
+
+        const keyboardOpen = window.matchMedia("(max-width: 768px)").matches
+          && stableViewportHeight - viewportHeight > 120;
+        const chatScroller = chatBodyRef.current;
+        const wasNearBottom = chatScroller
+          ? chatScroller.scrollHeight - chatScroller.scrollTop - chatScroller.clientHeight < 160
+          : false;
+
+        root.style.setProperty("--mindmate-viewport-height", `${viewportHeight}px`);
+        root.style.setProperty("--mindmate-viewport-offset-top", `${viewportTop}px`);
+        root.style.setProperty("--vh", `${viewportHeight * 0.01}px`);
+        root.dataset.keyboardOpen = keyboardOpen ? "true" : "false";
+
+        window.cancelAnimationFrame(followUpFrame);
+        followUpFrame = window.requestAnimationFrame(() => {
+          const appShell = document.querySelector(".chatgpt-wrapper");
+          if (appShell) {
+            appShell.scrollTop = 0;
+            appShell.scrollLeft = 0;
+          }
+
+          if (wasNearBottom && chatBodyRef.current) {
+            chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+            setUserScrolledUp(false);
+          }
+        });
+      });
     };
-    window.addEventListener('resize', setVh);
-    window.addEventListener('orientationchange', setVh);
-    setVh();
+
+    visualViewport?.addEventListener("resize", updateViewport);
+    visualViewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    updateViewport();
+
     return () => {
-      window.removeEventListener('resize', setVh);
-      window.removeEventListener('orientationchange', setVh);
+      window.cancelAnimationFrame(animationFrame);
+      window.cancelAnimationFrame(followUpFrame);
+      visualViewport?.removeEventListener("resize", updateViewport);
+      visualViewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+      root.classList.remove("mindmate-chat-route");
+      body.classList.remove("mindmate-chat-route");
+      delete root.dataset.keyboardOpen;
+      root.style.removeProperty("--mindmate-viewport-height");
+      root.style.removeProperty("--mindmate-viewport-offset-top");
+      root.style.removeProperty("--vh");
     };
-  }, []);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (window.matchMedia("(max-width: 768px)").matches) {
@@ -906,9 +1029,17 @@ function App() {
 
   const confirmDictation = async () => {
     const dictatedText = input.trim();
-    await SpeechRecognition.stopListening();
-    resetTranscript();
-    if (dictatedText) await sendMessage(dictatedText);
+    dictationSessionRef.current += 1;
+    dictationStreamRef.current?.getTracks().forEach((track) => track.stop());
+    dictationStreamRef.current = null;
+    setDictationStream(null);
+
+    try {
+      await SpeechRecognition.stopListening();
+    } finally {
+      resetTranscript();
+      if (dictatedText) await sendMessage(dictatedText);
+    }
   };
 
 
@@ -1589,16 +1720,11 @@ function App() {
                         rows={1}
                         onChange={(e) => {
                           setInput(e.target.value);
-
-                          // Reset height to recalc scrollHeight
-                          e.target.style.height = "auto";
-
-                          // Grow textarea up to max
-                          const newHeight = Math.min(e.target.scrollHeight, 200); // max 200px
-                          e.target.style.height = `${newHeight}px`;
-
-                          // Grow parent container
-                          e.target.parentElement.style.height = `${newHeight + 16}px`;
+                          const textarea = e.currentTarget;
+                          textarea.style.height = "auto";
+                          const nextHeight = Math.min(textarea.scrollHeight, 120);
+                          textarea.style.height = `${nextHeight}px`;
+                          textarea.style.overflowY = textarea.scrollHeight > 120 ? "auto" : "hidden";
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
@@ -1633,7 +1759,7 @@ function App() {
                   ) : (
                     <div className="dictation-mode">
                       {/* waveform */}
-                      <VoicePulseLine isListening={listening} volume={currentVolume} />
+                      <VoicePulseLine isListening={listening} stream={dictationStream} />
 
 
                       <div className="dictation-actions">
