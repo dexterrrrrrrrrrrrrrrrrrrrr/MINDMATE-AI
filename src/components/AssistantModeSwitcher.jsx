@@ -1,6 +1,24 @@
 import { useMemo, useRef } from "react";
+import {
+  Briefcase,
+  Compass,
+  HeartHandshake,
+  Stethoscope,
+} from "lucide-react";
 import "../styles/AssistantModeSwitcher.css";
 import { ASSISTANT_MODE_OPTIONS } from "../constants/assistantModes";
+
+const LUCIDE_MODE_ICONS = Object.freeze({
+  Briefcase,
+  Compass,
+  HeartHandshake,
+  Stethoscope,
+});
+
+const getModeIcon = (icon) => {
+  if (icon?.library !== "lucide") return null;
+  return LUCIDE_MODE_ICONS[icon.name] ?? null;
+};
 
 const normalizeOptions = (options) => {
   const source = Array.isArray(options) && options.length > 0
@@ -14,6 +32,7 @@ const normalizeOptions = (options) => {
           value: option.toLowerCase().replace(/\s+/g, "-"),
           label: option,
           description: "",
+          icon: null,
           disabled: false,
         };
       }
@@ -25,6 +44,7 @@ const normalizeOptions = (options) => {
         value: String(optionValue),
         label: option.label ?? option.name ?? String(optionValue),
         description: option.description ?? "",
+        icon: option.icon ?? null,
         disabled: Boolean(option.disabled),
       };
     })
@@ -60,6 +80,8 @@ export default function AssistantModeSwitcher({
   };
 
   const handleKeyDown = (event, currentIndex) => {
+    if (disabled) return;
+
     const enabledIndices = normalizedOptions
       .map((option, index) => (!option.disabled ? index : -1))
       .filter((index) => index >= 0);
@@ -92,6 +114,8 @@ export default function AssistantModeSwitcher({
       aria-label={ariaLabel}
       aria-orientation="horizontal"
       aria-disabled={disabled || undefined}
+      data-disabled={disabled || undefined}
+      data-selected-mode={selectedValue}
       style={{
         "--assistant-mode-count": normalizedOptions.length,
         "--assistant-mode-index": selectedIndex,
@@ -101,6 +125,8 @@ export default function AssistantModeSwitcher({
 
       {normalizedOptions.map((option, index) => {
         const isSelected = option.value === selectedValue;
+        const isDisabled = disabled || option.disabled;
+        const ModeIcon = getModeIcon(option.icon);
 
         return (
           <button
@@ -111,16 +137,25 @@ export default function AssistantModeSwitcher({
             type="button"
             role="radio"
             aria-checked={isSelected}
-            aria-disabled={disabled || option.disabled || undefined}
+            aria-disabled={isDisabled || undefined}
             aria-label={option.description ? `${option.label}: ${option.description}` : option.label}
             title={option.description || option.label}
-            disabled={option.disabled}
-            tabIndex={isSelected ? 0 : -1}
-            className={`assistant-mode-switcher__option ${isSelected ? "is-selected" : ""}`}
+            disabled={isDisabled}
+            tabIndex={!isDisabled && isSelected ? 0 : -1}
+            className={`assistant-mode-switcher__option ${ModeIcon ? "has-icon" : ""} ${isSelected ? "is-selected" : ""}`.trim()}
             onClick={() => selectOption(index)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
-            <span>{option.label}</span>
+            {ModeIcon && (
+              <ModeIcon
+                className="assistant-mode-switcher__icon"
+                size={16}
+                strokeWidth={1.9}
+                aria-hidden="true"
+                focusable="false"
+              />
+            )}
+            <span className="assistant-mode-switcher__label">{option.label}</span>
           </button>
         );
       })}

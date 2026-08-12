@@ -5,10 +5,12 @@
   display: grid;
   place-items: center;
   padding: 18px;
-  color: #f3f5f8;
-  background: rgba(3, 4, 7, 0.68);
-  backdrop-filter: blur(14px) saturate(112%);
-  -webkit-backdrop-filter: blur(14px) saturate(112%);
+  color: var(--mm-text, #f7f8fb);
+  background:
+    radial-gradient(circle at 50% 10%, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.13), transparent 42%),
+    rgba(3, 4, 9, 0.64);
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
   opacity: 0;
   animation: settingsBackdropIn 220ms ease forwards;
 }
@@ -25,14 +27,21 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: #f3f5f8;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  background:
-    linear-gradient(145deg, rgba(29, 31, 36, 0.96), rgba(14, 15, 19, 0.98));
+  color: var(--mm-text, #f7f8fb);
+  border: 1px solid var(--mm-glass-border, rgba(255, 255, 255, 0.13));
+  border-radius: var(--mm-radius-panel, 24px);
+  background-color: rgba(9, 11, 16, 0.24);
+  background-image:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.13), transparent 30%),
+    radial-gradient(circle at 84% 0%, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.14), transparent 38%),
+    linear-gradient(155deg, var(--mm-glass, rgba(20, 23, 31, 0.54)), var(--mm-glass-strong, rgba(17, 19, 27, 0.78)));
   box-shadow:
-    inset 0 1px rgba(255, 255, 255, 0.045),
-    0 30px 90px rgba(0, 0, 0, 0.56);
+    inset 0 1px 0 var(--mm-glass-highlight, rgba(255, 255, 255, 0.2)),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+    var(--mm-glass-shadow, 0 22px 60px rgba(0, 0, 0, 0.38)),
+    0 34px 100px rgba(0, 0, 0, 0.46);
+  backdrop-filter: blur(var(--mm-glass-blur, 24px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--mm-glass-blur, 24px)) saturate(150%);
   transform: translateY(8px) scale(0.985);
   opacity: 0;
   animation: settingsModalIn 220ms cubic-bezier(0.2, 0.78, 0.24, 1) forwards;
@@ -52,18 +61,19 @@
   display: grid;
   place-items: center;
   padding: 0;
-  color: rgba(239, 242, 247, 0.72);
-  border: 1px solid transparent;
+  color: var(--mm-text-muted, rgba(226, 230, 239, 0.68));
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 50%;
-  background: transparent;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 6px 16px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
 
 .settings-close-button:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.065);
+  color: var(--mm-text, #f7f8fb);
+  border-color: var(--mm-glass-border, rgba(255, 255, 255, 0.13));
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.055));
 }
 
 .settings-close-button:focus-visible,
@@ -72,7 +82,7 @@
 .settings-modal select:focus-visible,
 .settings-modal button:focus-visible,
 .settings-modal input:focus-visible {
-  outline: 2px solid rgba(149, 190, 245, 0.82);
+  outline: 2px solid var(--mm-focus, #ab9aff);
   outline-offset: 2px;
 }
 
@@ -86,8 +96,10 @@
   width: 176px;
   flex: 0 0 176px;
   padding: 64px 14px 18px;
-  border-right: 1px solid rgba(255, 255, 255, 0.065);
-  background: rgba(4, 5, 8, 0.24);
+  border-right: 1px solid rgba(255, 255, 255, 0.085);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 42%),
+    rgba(4, 5, 10, 0.2);
 }
 
 .settings-tabs {
@@ -99,27 +111,30 @@
   width: 100%;
   min-height: 40px;
   padding: 9px 12px;
-  color: rgba(228, 232, 239, 0.66);
+  color: var(--mm-text-muted, rgba(226, 230, 239, 0.68));
   text-align: left;
   font: inherit;
   font-size: 13px;
   font-weight: 520;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 12px;
   background: transparent;
   cursor: pointer;
   transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
 }
 
 .settings-tab:hover {
-  color: rgba(247, 248, 250, 0.92);
-  background: rgba(255, 255, 255, 0.045);
+  color: var(--mm-text, #f7f8fb);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
 }
 
 .settings-tab.active {
-  color: #f8f9fb;
-  border-color: rgba(255, 255, 255, 0.075);
-  background: rgba(255, 255, 255, 0.075);
+  color: var(--mm-text, #f7f8fb);
+  border-color: rgba(var(--mm-mode-rgb, 168, 143, 255), 0.3);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045)),
+    rgba(var(--mm-mode-rgb, 168, 143, 255), 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 .settings-panel {
@@ -133,7 +148,7 @@
 
 .settings-panel h2 {
   margin: 0;
-  color: #f7f8fa;
+  color: var(--mm-text, #f7f8fb);
   font-size: 24px;
   font-weight: 620;
   letter-spacing: -0.035em;
@@ -141,7 +156,7 @@
 
 .settings-description {
   margin: 7px 0 26px;
-  color: rgba(222, 227, 235, 0.54);
+  color: var(--mm-text-muted, rgba(226, 230, 239, 0.68));
   font-size: 13px;
   line-height: 1.55;
 }
@@ -151,10 +166,12 @@
 .settings-danger-zone {
   width: 100%;
   padding: 17px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.035);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: var(--mm-radius-control, 18px);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.025)),
+    rgba(10, 12, 18, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075), 0 12px 28px rgba(0, 0, 0, 0.1);
 }
 
 .settings-surface + .settings-surface,
@@ -179,7 +196,7 @@
 .settings-row-copy h3,
 .settings-confirm-dialog h3 {
   margin: 0;
-  color: rgba(247, 248, 250, 0.94);
+  color: var(--mm-text, #f7f8fb);
   font-size: 14px;
   font-weight: 580;
   line-height: 1.35;
@@ -188,7 +205,7 @@
 .settings-row-copy p,
 .settings-confirm-dialog p {
   margin: 5px 0 0;
-  color: rgba(222, 227, 235, 0.5);
+  color: var(--mm-text-muted, rgba(226, 230, 239, 0.68));
   font-size: 11.5px;
   line-height: 1.5;
 }
@@ -215,11 +232,13 @@
 
 .settings-theme-button:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.045);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
 }
 
 .settings-theme-button.active {
-  border-color: rgba(237, 241, 247, 0.8);
+  border-color: var(--mm-accent, #b9aaff);
+  background: rgba(var(--mm-mode-rgb, 168, 143, 255), 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--mm-mode-rgb, 168, 143, 255), 0.1);
 }
 
 .settings-theme-button > span {
@@ -235,13 +254,13 @@
   min-width: 150px;
   min-height: 40px;
   padding: 8px 36px 8px 12px;
-  color: rgba(247, 248, 250, 0.92);
+  color: var(--mm-text, #f7f8fb);
   font: inherit;
   font-size: 13px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border: 1px solid var(--mm-glass-border, rgba(255, 255, 255, 0.13));
+  border-radius: 12px;
   outline: none;
-  background-color: #1b1d22;
+  background-color: #1b1d27;
   background-image: url("data:image/svg+xml;utf8,<svg fill='%23aeb4bd' height='20' viewBox='0 0 24 24' width='20' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -253,8 +272,8 @@
 }
 
 .settings-modal select:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background-color: #202228;
+  border-color: rgba(var(--mm-mode-rgb, 168, 143, 255), 0.42);
+  background-color: #222531;
 }
 
 .settings-modal select:disabled {
@@ -280,9 +299,10 @@
   height: 24px;
   position: relative;
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--mm-glass-border, rgba(255, 255, 255, 0.13));
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.055));
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.07);
   transition: background-color 160ms ease, border-color 160ms ease;
 }
 
@@ -294,14 +314,15 @@
   top: 2px;
   left: 2px;
   border-radius: 50%;
-  background: rgba(245, 246, 248, 0.88);
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.32);
+  background: linear-gradient(145deg, #ffffff, #dfe2ea);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32), inset 0 1px 0 #fff;
   transition: transform 160ms ease;
 }
 
 .settings-switch-row input:checked + i {
-  border-color: rgba(123, 167, 229, 0.4);
-  background: rgba(62, 111, 180, 0.78);
+  border-color: rgba(var(--mm-mode-rgb, 168, 143, 255), 0.58);
+  background: linear-gradient(135deg, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.98), rgba(var(--mm-mode-rgb, 168, 143, 255), 0.65));
+  box-shadow: 0 5px 16px rgba(var(--mm-mode-rgb, 168, 143, 255), 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 .settings-switch-row input:checked + i::after {
@@ -309,7 +330,7 @@
 }
 
 .settings-switch-row input:focus-visible + i {
-  outline: 2px solid rgba(149, 190, 245, 0.82);
+  outline: 2px solid var(--mm-focus, #ab9aff);
   outline-offset: 2px;
 }
 
@@ -336,7 +357,10 @@
   color: rgba(245, 247, 250, 0.88);
   font-size: 15px;
   font-weight: 620;
-  background: linear-gradient(145deg, #414650, #24272e);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.2), transparent 44%),
+    linear-gradient(145deg, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.78), rgba(35, 38, 50, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
 .settings-account-summary > div {
@@ -347,7 +371,7 @@
 
 .settings-account-summary strong {
   overflow: hidden;
-  color: rgba(247, 248, 250, 0.94);
+  color: var(--mm-text, #f7f8fb);
   font-size: 13px;
   font-weight: 580;
   text-overflow: ellipsis;
@@ -356,7 +380,7 @@
 
 .settings-account-summary div > span {
   overflow: hidden;
-  color: rgba(222, 227, 235, 0.5);
+  color: var(--mm-text-muted, rgba(226, 230, 239, 0.68));
   font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -380,19 +404,22 @@
 }
 
 .settings-secondary-button {
-  color: rgba(245, 247, 250, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.055);
+  color: var(--mm-text, #f7f8fb);
+  border: 1px solid var(--mm-glass-border, rgba(255, 255, 255, 0.13));
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 7px 18px rgba(0, 0, 0, 0.12);
 }
 
 .settings-secondary-button:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.085);
+  border-color: rgba(var(--mm-mode-rgb, 168, 143, 255), 0.36);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.17), rgba(var(--mm-mode-rgb, 168, 143, 255), 0.09));
 }
 
 .settings-danger-zone {
   border-color: rgba(218, 91, 98, 0.17);
-  background: rgba(103, 31, 36, 0.08);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), transparent),
+    rgba(103, 31, 36, 0.1);
 }
 
 .settings-danger-button,
@@ -422,20 +449,25 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(5, 6, 8, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(5, 6, 10, 0.62);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
   animation: settingsDialogBackdropIn 160ms ease both;
 }
 
 .settings-confirm-dialog {
   width: min(370px, 100%);
   padding: 22px;
-  color: #f4f6f8;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  background: linear-gradient(145deg, #22242a, #15161a);
-  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.52), inset 0 1px rgba(255, 255, 255, 0.035);
+  color: var(--mm-text, #f7f8fb);
+  border: 1px solid var(--mm-glass-border, rgba(255, 255, 255, 0.13));
+  border-radius: var(--mm-radius-control, 18px);
+  background-color: rgba(12, 14, 20, 0.28);
+  background-image:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.13), transparent 35%),
+    linear-gradient(155deg, var(--mm-glass, rgba(20, 23, 31, 0.54)), var(--mm-glass-strong, rgba(17, 19, 27, 0.78)));
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.48), inset 0 1px 0 var(--mm-glass-highlight, rgba(255, 255, 255, 0.2));
+  backdrop-filter: blur(20px) saturate(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
   animation: settingsDialogIn 180ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
@@ -452,7 +484,7 @@
 .settings-password-label {
   margin: 18px 0 7px;
   display: block;
-  color: rgba(236, 239, 244, 0.72);
+  color: var(--mm-text-muted, rgba(226, 230, 239, 0.68));
   font-size: 12px;
   font-weight: 540;
 }
@@ -461,13 +493,13 @@
   width: 100%;
   min-height: 42px;
   padding: 9px 11px;
-  color: #f6f7f9;
+  color: var(--mm-text, #f7f8fb);
   font: inherit;
   font-size: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border: 1px solid var(--mm-glass-border, rgba(255, 255, 255, 0.13));
+  border-radius: 12px;
   outline: none;
-  background: rgba(4, 5, 8, 0.38);
+  background: linear-gradient(145deg, rgba(3, 4, 8, 0.46), rgba(255, 255, 255, 0.025));
 }
 
 .settings-dialog-actions {
@@ -487,8 +519,8 @@
 }
 
 .settings-dialog-cancel {
-  color: rgba(240, 243, 247, 0.76);
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--mm-text-muted, rgba(226, 230, 239, 0.68));
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025));
 }
 
 .settings-dialog-cancel:hover {
@@ -499,7 +531,8 @@
 .settings-dialog-primary {
   color: #15171b;
   border-color: rgba(255, 255, 255, 0.7) !important;
-  background: rgba(244, 246, 249, 0.94);
+  background: linear-gradient(145deg, #ffffff, rgba(235, 229, 255, 0.94));
+  box-shadow: 0 8px 20px rgba(var(--mm-mode-rgb, 168, 143, 255), 0.18), inset 0 1px 0 #fff;
 }
 
 .settings-dialog-primary:hover {
@@ -534,6 +567,19 @@
 @keyframes settingsDialogIn {
   from { opacity: 0; transform: translateY(6px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .settings-overlay,
+  .settings-confirm-backdrop {
+    background: rgba(3, 4, 9, 0.9);
+  }
+
+  .settings-modal,
+  .settings-confirm-dialog {
+    background-color: #151720;
+    background-image: linear-gradient(145deg, #242733, #12141b);
+  }
 }
 
 @media (max-width: 640px) {

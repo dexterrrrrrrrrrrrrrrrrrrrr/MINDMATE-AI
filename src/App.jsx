@@ -1114,7 +1114,7 @@ function App() {
 
 
 
-          <div className="chatgpt-wrapper">
+          <div className="chatgpt-wrapper" data-assistant-mode={assistantModeId}>
             <div className={`sidebar-container visible`}>
 
               <Sidebar
@@ -1147,7 +1147,16 @@ function App() {
                 onOpenSettings={() => setSettingsOpen(true)}
                 onLoginClick={() => navigate("/login")}
                 onToggleSidebar={() => setSidebarOpen((open) => !open)}
-
+                modeSwitcher={(
+                  <AssistantModeSwitcher
+                    value={assistantModeId}
+                    onChange={handleAssistantModeChange}
+                    options={ASSISTANT_MODE_OPTIONS}
+                    disabled={isTyping || isThinking || listening || modeSaving}
+                    ariaLabel="Choose how MindMate should respond"
+                    className="topbar-mode-switcher"
+                  />
+                )}
               />
               <SettingsModal
                 isOpen={isSettingsOpen}
@@ -1550,15 +1559,6 @@ function App() {
                   }`}
 
               >
-
-                <AssistantModeSwitcher
-                  value={assistantModeId}
-                  onChange={handleAssistantModeChange}
-                  options={ASSISTANT_MODE_OPTIONS}
-                  disabled={isTyping || isThinking || listening || modeSaving}
-                  ariaLabel="Choose how MindMate should respond"
-                  className="composer-mode-switcher"
-                />
 
                 {showChips &&
                   !activeChatId &&

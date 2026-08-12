@@ -275,6 +275,7 @@ export default function Sidebar({
           <button
             className="collapse-btn"
             onClick={onToggleCollapse}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <svg width="18" height="18" viewBox="0 0 24 24">
               {collapsed ? (
@@ -306,30 +307,6 @@ export default function Sidebar({
             ref={newChatButtonRef}
             onClick={handleNewChatClick}
             className="new-chat-btn"
-
-            style={{
-
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontWeight: "bold",
-              marginTop: "5px",
-              padding: "1px 16px",
-              backgroundColor: "transparent",
-              color: "white",
-              border: "none",
-
-              cursor: "pointer",
-              transition: "all 0.2s ease-in-out", // smooth effect
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
-              e.currentTarget.style.transform = "translateY(-2px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = "none";
-              e.currentTarget.style.transform = "translateY(0)";
-            }}
           >
             {/* Chat Plus Icon */}
             <svg

@@ -3,7 +3,15 @@ import LOGO2 from "../assets/LOGO2.svg";
 import "../styles/App.css";
 import { useState, useRef, useEffect } from "react";
 
-const Topbar = ({ user, onLogout, goToPremium, onOpenSettings, onLoginClick, onToggleSidebar }) => {
+const Topbar = ({
+  user,
+  onLogout,
+  goToPremium,
+  onOpenSettings,
+  onLoginClick,
+  onToggleSidebar,
+  modeSwitcher,
+}) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const menuRef = useRef();
@@ -46,29 +54,33 @@ const Topbar = ({ user, onLogout, goToPremium, onOpenSettings, onLoginClick, onT
 
   return (
     <header className="topbar">
+      <div className="topbar__leading">
+        <button type="button" className="topbar-menu-button" onClick={onToggleSidebar} aria-label="Open navigation">
+          <Menu size={20} />
+        </button>
 
-      <button type="button" className="topbar-menu-button" onClick={onToggleSidebar} aria-label="Open navigation">
-        <Menu size={21} />
-      </button>
-
-      {/* Center: Logo */}
-      <div className="brand-logo">
-        <img
-          src={LOGO2}
-          alt="Logo"
-          className="logo-icon"
-        />
-
-        {/* Brand title always visible */}
-        <h2 className="brand-title">MindMate</h2>
+        <div className="brand-logo">
+          <span className="brand-logo__mark" aria-hidden="true">
+            <img
+              src={LOGO2}
+              alt=""
+              className="logo-icon"
+            />
+          </span>
+          <span className="brand-logo__copy">
+            <strong className="brand-title">MindMate</strong>
+            <small>Choose your space</small>
+          </span>
+        </div>
       </div>
 
+      <div className="topbar-mode-slot">
+        {modeSwitcher}
+      </div>
 
-
-
-      {/* Right: User Menu or Guest Buttons */}
-      {user ? (
-        <div className="profile-container" ref={menuRef}>
+      <div className="topbar__trailing">
+        {user ? (
+          <div className="profile-container" ref={menuRef}>
           <button
             ref={avatarButtonRef}
             type="button"
@@ -131,23 +143,24 @@ const Topbar = ({ user, onLogout, goToPremium, onOpenSettings, onLoginClick, onT
               </button>
             </div>
           )}
-        </div>
-      ) : (
-        <div className="guest-buttons">
-          <button
-            type="button"
-            onClick={onLoginClick}
-          >
-            Login
-          </button>
-          <button
-            type="button"
-            onClick={onLoginClick}
-          >
-            Sign Up
-          </button>
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="guest-buttons">
+            <button
+              type="button"
+              onClick={onLoginClick}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={onLoginClick}
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 };

@@ -5,7 +5,7 @@ const Starfield = () => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d", { alpha: false });
+    const context = canvas?.getContext("2d", { alpha: true });
     if (!canvas || !context) return undefined;
 
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -54,8 +54,7 @@ const Starfield = () => {
     };
 
     const paintBackground = () => {
-      context.fillStyle = "#020203";
-      context.fillRect(0, 0, width, height);
+      context.clearRect(0, 0, width, height);
 
       const atmosphere = context.createRadialGradient(
         width * 0.54,
