@@ -654,8 +654,12 @@ function App() {
     const visualViewport = window.visualViewport;
     let animationFrame = 0;
     let followUpFrame = 0;
+    let composerAnimation = null;
     let frozenChatScrollTop = null;
     let releaseScrollTimer = 0;
+    let restingViewportHeight = Math.round(
+      visualViewport?.height || document.documentElement.clientHeight
+    );
 
     root.classList.add("mindmate-chat-route");
     body.classList.add("mindmate-chat-route");
@@ -674,15 +678,20 @@ function App() {
     };
 
     const updateViewport = () => {
+      const motionTargetBeforeUpdate = composerRef.current?.querySelector(".input-inner");
+      const previousComposerTop = motionTargetBeforeUpdate?.getBoundingClientRect().top ?? null;
+
       window.cancelAnimationFrame(animationFrame);
+      window.cancelAnimationFrame(followUpFrame);
       animationFrame = window.requestAnimationFrame(() => {
         const viewportHeight = Math.round(
           visualViewport?.height || document.documentElement.clientHeight
         );
         const composerFocused = document.activeElement?.classList?.contains("input-box");
+        if (!composerFocused) restingViewportHeight = viewportHeight;
         const keyboardOpen = window.matchMedia("(max-width: 768px)").matches
           && composerFocused
-          && viewportHeight < 620;
+          && restingViewportHeight - viewportHeight > 80;
 
         // Follow the browser's actually visible viewport. This keeps the input
         // above both the software keyboard and Chrome's bottom controls.
@@ -703,7 +712,40 @@ function App() {
           }, 280);
         }
 
-        window.cancelAnimationFrame(followUpFrame);
+        const nextMotionTarget = composerRef.current?.querySelector(".input-inner");
+        if (previousComposerTop !== null && nextMotionTarget) {
+          // Continue from the currently visible position during the keyboard's
+          // multi-frame resize, then ease only the composer to its new home.
+          composerAnimation?.cancel();
+          composerAnimation = null;
+
+          const nextComposerTop = nextMotionTarget.getBoundingClientRect().top;
+          const delta = previousComposerTop - nextComposerTop;
+          const shouldAnimate = window.matchMedia("(max-width: 768px)").matches
+            && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            && Math.abs(delta) > 1
+            && Math.abs(delta) < viewportHeight;
+
+          if (shouldAnimate && typeof nextMotionTarget.animate === "function") {
+            const movement = nextMotionTarget.animate(
+              [
+                { translate: `0 ${delta}px` },
+                { translate: "0 0" },
+              ],
+              {
+                duration: 260,
+                easing: "cubic-bezier(.22, .8, .25, 1)",
+              }
+            );
+            composerAnimation = movement;
+            movement.finished
+              .catch(() => {})
+              .finally(() => {
+                if (composerAnimation === movement) composerAnimation = null;
+              });
+          }
+        }
+
         followUpFrame = window.requestAnimationFrame(() => {
           if (
             frozenChatScrollTop !== null
@@ -727,6 +769,7 @@ function App() {
       window.cancelAnimationFrame(animationFrame);
       window.cancelAnimationFrame(followUpFrame);
       window.clearTimeout(releaseScrollTimer);
+      composerAnimation?.cancel();
       visualViewport?.removeEventListener("resize", updateViewport);
       visualViewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);
@@ -747,12 +790,16 @@ function App() {
   useEffect(() => {
     if (window.matchMedia("(max-width: 768px)").matches) {
       setSidebarOpen(false);
+      setCollapsed(false);
     }
   }, [location.pathname]);
 
   useEffect(() => {
     const mobileQuery = window.matchMedia("(max-width: 768px)");
-    const syncSidebarToViewport = (event) => setSidebarOpen(!event.matches);
+    const syncSidebarToViewport = (event) => {
+      setSidebarOpen(!event.matches);
+      if (event.matches) setCollapsed(false);
+    };
     mobileQuery.addEventListener("change", syncSidebarToViewport);
     return () => mobileQuery.removeEventListener("change", syncSidebarToViewport);
   }, []);
@@ -1303,7 +1350,7 @@ function App() {
                 onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
                 sidebarOpen={sidebarOpen}
                 collapsed={collapsed}
-                onToggleCollapse={() => setCollapsed(!collapsed)}
+                onToggleCollapse={() => setCollapsed((current) => !current)}
                 goToPremium={goToPremium}
               />
             </div>

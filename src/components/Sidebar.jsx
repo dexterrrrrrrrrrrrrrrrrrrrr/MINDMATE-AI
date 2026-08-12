@@ -43,6 +43,12 @@ export default function Sidebar({
       ? window.matchMedia("(hover: none), (pointer: coarse)").matches
       : false
   );
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(max-width: 768px)").matches
+      : false
+  );
+  const displayCollapsed = collapsed && !isMobileViewport;
 
   const handleOverlayClick = (e) => {
     if (e.target !== e.currentTarget || !sidebarOpen) return;
@@ -80,6 +86,15 @@ export default function Sidebar({
     pointerQuery.addEventListener?.("change", updatePointerType);
 
     return () => pointerQuery.removeEventListener?.("change", updatePointerType);
+  }, []);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia("(max-width: 768px)");
+    const updateViewport = () => setIsMobileViewport(mobileQuery.matches);
+
+    updateViewport();
+    mobileQuery.addEventListener?.("change", updateViewport);
+    return () => mobileQuery.removeEventListener?.("change", updateViewport);
   }, []);
 
   useEffect(() => () => window.clearTimeout(toastTimeoutRef.current), []);
@@ -260,7 +275,8 @@ export default function Sidebar({
       )}
 
       <div
-        className={`sidebar ${collapsed ? "collapsed" : "expanded"} ${sidebarOpen ? "visible" : ""
+        id="mindmate-sidebar"
+        className={`sidebar ${displayCollapsed ? "collapsed" : "expanded"} ${sidebarOpen ? "visible" : ""
           }`}
       >
         {/* Logo */}
@@ -274,11 +290,13 @@ export default function Sidebar({
 
           <button
             className="collapse-btn"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={isMobileViewport ? onToggleSidebar : onToggleCollapse}
+            aria-label={isMobileViewport ? "Close sidebar" : displayCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-controls="mindmate-sidebar"
+            aria-expanded={isMobileViewport ? sidebarOpen : !displayCollapsed}
           >
             <svg width="18" height="18" viewBox="0 0 24 24">
-              {collapsed ? (
+              {displayCollapsed ? (
                 <path
                   d="M9 18l6-6-6-6"
                   stroke="white"
@@ -325,27 +343,27 @@ export default function Sidebar({
               <line x1="16" y1="6" x2="22" y2="6"></line>
             </svg>
 
-            {!collapsed && <span>New Chat</span>}
+            {!displayCollapsed && <span>New Chat</span>}
           </button>
 
           <button type="button" className="feature-btn" onClick={onOpenMoodTracker}>
             <SmilePlus size={18} />
-            {!collapsed && <span>Mood</span>}
+            {!displayCollapsed && <span>Mood</span>}
           </button>
 
           <button type="button" className="feature-btn" onClick={() => navigate("/journals")}>
             <NotebookPen size={18} />
-            {!collapsed && <span>Journaling</span>}
+            {!displayCollapsed && <span>Journaling</span>}
           </button>
 
           <button type="button" className="feature-btn" onClick={() => navigate("/goals")}>
             <Target size={18} />
-            {!collapsed && <span>Goals</span>}
+            {!displayCollapsed && <span>Goals</span>}
           </button>
 
           <button
             type="button"
-            className={`search-container ${collapsed ? "collapsed" : ""}`}
+            className={`search-container ${displayCollapsed ? "collapsed" : ""}`}
             onClick={(e) => {
               e.stopPropagation();
               onOpenSearch();
@@ -364,7 +382,7 @@ export default function Sidebar({
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
 
-            {!collapsed && (
+            {!displayCollapsed && (
               <span className="search-placeholder">
                 Search chats...
 
@@ -375,7 +393,7 @@ export default function Sidebar({
         </div>
 
         {/* ---------- BOTTOM SECTION ---------- */}
-        {collapsed && (
+        {displayCollapsed && (
           <div className="sidebar-bottom">
             <div className="upgrade-section" onClick={goToPremium}>
               <svg
@@ -402,8 +420,8 @@ export default function Sidebar({
         <ul
           className="chat-list"
           style={{
-            pointerEvents: collapsed ? "none" : "auto",
-            opacity: collapsed ? 0 : 1
+            pointerEvents: displayCollapsed ? "none" : "auto",
+            opacity: displayCollapsed ? 0 : 1
           }}
         >
           {filteredChats.length === 0 ? (
