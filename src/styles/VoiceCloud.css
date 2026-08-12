@@ -7,15 +7,11 @@
   place-items: center;
   overflow: hidden;
   color: var(--mm-text, #f7f8fb);
-  background-color: var(--mm-bg, #040509);
-  background-image:
-    radial-gradient(circle at 50% 38%, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.12), transparent 28%),
-    radial-gradient(circle at 50% 108%, rgba(77, 132, 220, 0.11), transparent 38%),
-    linear-gradient(180deg, #080a11 0%, var(--mm-bg, #040509) 68%, #020307 100%);
+  background: #000;
 }
 
 .voice-screen::before {
-  content: "";
+  content: none;
   position: absolute;
   inset: 0;
   pointer-events: none;

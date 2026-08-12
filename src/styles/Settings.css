@@ -6,9 +6,7 @@
   place-items: center;
   padding: 18px;
   color: var(--mm-text, #f7f8fb);
-  background:
-    radial-gradient(circle at 50% 10%, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.13), transparent 42%),
-    rgba(3, 4, 9, 0.64);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(18px) saturate(125%);
   -webkit-backdrop-filter: blur(18px) saturate(125%);
   opacity: 0;

@@ -13,10 +13,7 @@
   justify-content: center;
   color: var(--mm-text);
   color-scheme: dark;
-  background:
-    radial-gradient(circle at 50% 30%, rgba(var(--mm-mode-rgb), 0.17), transparent 34%),
-    radial-gradient(circle at 18% 76%, rgba(99, 176, 206, 0.09), transparent 28%),
-    linear-gradient(145deg, #090a11 0%, var(--mm-bg) 55%, #0c0d15 100%);
+  background: #000;
   animation: splashScreenIn 700ms ease-out both;
 }
 
@@ -40,7 +37,7 @@
 }
 
 .splash-screen::after {
-  content: "";
+  content: none;
   width: min(360px, 76vw);
   aspect-ratio: 1;
   position: absolute;

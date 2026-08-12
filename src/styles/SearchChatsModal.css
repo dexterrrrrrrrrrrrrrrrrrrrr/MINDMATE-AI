@@ -5,9 +5,7 @@
   padding: 16px;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 50% 14%, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.12), transparent 40%),
-    rgba(2, 3, 7, 0.64);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(18px) saturate(125%);
   -webkit-backdrop-filter: blur(18px) saturate(125%);
   animation: chatSearchOverlayIn 180ms ease;

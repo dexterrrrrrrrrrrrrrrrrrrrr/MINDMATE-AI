@@ -2,11 +2,7 @@
   min-height: 100vh;
   min-height: 100dvh;
   color: var(--mm-text, #f7f8fb);
-  background-color: var(--mm-bg, #040509);
-  background-image:
-    radial-gradient(circle at 12% -2%, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.15), transparent 31%),
-    radial-gradient(circle at 91% 23%, rgba(90, 151, 255, 0.075), transparent 29%),
-    linear-gradient(180deg, #080a11 0%, var(--mm-bg, #040509) 64%, #030407 100%);
+  background: #000;
 }
 
 .journal-page button,

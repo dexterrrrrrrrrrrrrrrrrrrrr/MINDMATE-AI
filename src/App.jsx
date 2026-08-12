@@ -654,13 +654,8 @@ function App() {
     const visualViewport = window.visualViewport;
     let animationFrame = 0;
     let followUpFrame = 0;
-    let stableViewportHeight = Math.max(
-      window.innerHeight,
-      visualViewport?.height || 0
-    );
-    let previousWidth = window.innerWidth;
     let frozenChatScrollTop = null;
-    let freezeChatUntil = 0;
+    let releaseScrollTimer = 0;
 
     root.classList.add("mindmate-chat-route");
     body.classList.add("mindmate-chat-route");
@@ -669,62 +664,49 @@ function App() {
     const handleFocusIn = (event) => {
       if (!event.target?.classList?.contains("input-box")) return;
       frozenChatScrollTop = chatBodyRef.current?.scrollTop ?? null;
-      freezeChatUntil = performance.now() + 800;
       updateViewport();
     };
 
     const handleFocusOut = (event) => {
       if (!event.target?.classList?.contains("input-box")) return;
-      freezeChatUntil = performance.now() + 500;
+      frozenChatScrollTop = chatBodyRef.current?.scrollTop ?? null;
       updateViewport();
     };
 
     const updateViewport = () => {
       window.cancelAnimationFrame(animationFrame);
       animationFrame = window.requestAnimationFrame(() => {
-        const viewportHeight = Math.round(visualViewport?.height || window.innerHeight);
-        const viewportTop = Math.round(Math.max(
-          visualViewport?.offsetTop || 0,
-          (visualViewport?.pageTop || 0) - window.scrollY
-        ));
-        const currentWidth = window.innerWidth;
-
-        // A meaningful width change is an orientation/layout change. Height-only
-        // changes are usually the mobile keyboard, so retain the pre-keyboard
-        // height as our comparison baseline.
-        if (Math.abs(currentWidth - previousWidth) > 48) {
-          stableViewportHeight = Math.max(window.innerHeight, viewportHeight);
-          previousWidth = currentWidth;
-        } else {
-          stableViewportHeight = Math.max(stableViewportHeight, window.innerHeight, viewportHeight);
-        }
-
-        const keyboardInset = Math.max(0, stableViewportHeight - viewportHeight);
+        const viewportHeight = Math.round(
+          visualViewport?.height || document.documentElement.clientHeight
+        );
         const composerFocused = document.activeElement?.classList?.contains("input-box");
         const keyboardOpen = window.matchMedia("(max-width: 768px)").matches
-          && keyboardInset > 120;
+          && composerFocused
+          && viewportHeight < 620;
 
-        // Keep the app shell at its pre-keyboard height. Only the composer is
-        // lifted by the obscured portion of the viewport, so focusing the input
-        // cannot resize or scroll the conversation itself.
-        root.style.setProperty("--mindmate-viewport-height", `${stableViewportHeight}px`);
+        // Follow the browser's actually visible viewport. This keeps the input
+        // above both the software keyboard and Chrome's bottom controls.
+        root.style.setProperty("--mindmate-viewport-height", `${viewportHeight}px`);
         root.style.setProperty("--mindmate-visible-height", `${viewportHeight}px`);
-        root.style.setProperty("--mindmate-keyboard-inset", `${composerFocused ? keyboardInset : 0}px`);
-        root.style.setProperty("--mindmate-viewport-offset-top", `${viewportTop}px`);
+        root.style.setProperty("--mindmate-keyboard-inset", "0px");
+        root.style.setProperty(
+          "--mindmate-viewport-offset-top",
+          `${Math.round(visualViewport?.offsetTop || 0)}px`
+        );
         root.style.setProperty("--vh", `${viewportHeight * 0.01}px`);
         root.dataset.keyboardOpen = keyboardOpen ? "true" : "false";
 
+        if (frozenChatScrollTop !== null) {
+          window.clearTimeout(releaseScrollTimer);
+          releaseScrollTimer = window.setTimeout(() => {
+            frozenChatScrollTop = null;
+          }, 280);
+        }
+
         window.cancelAnimationFrame(followUpFrame);
         followUpFrame = window.requestAnimationFrame(() => {
-          const appShell = document.querySelector(".chatgpt-wrapper");
-          if (appShell) {
-            appShell.scrollTop = 0;
-            appShell.scrollLeft = 0;
-          }
-
           if (
             frozenChatScrollTop !== null
-            && performance.now() <= freezeChatUntil
             && chatBodyRef.current
           ) {
             chatBodyRef.current.scrollTop = frozenChatScrollTop;
@@ -744,6 +726,7 @@ function App() {
     return () => {
       window.cancelAnimationFrame(animationFrame);
       window.cancelAnimationFrame(followUpFrame);
+      window.clearTimeout(releaseScrollTimer);
       visualViewport?.removeEventListener("resize", updateViewport);
       visualViewport?.removeEventListener("scroll", updateViewport);
       window.removeEventListener("resize", updateViewport);

@@ -4,11 +4,7 @@
   padding: clamp(48px, 7vw, 76px) 20px calc(72px + env(safe-area-inset-bottom));
   color: var(--mm-text, #f7f8fb);
   text-align: center;
-  background-color: var(--mm-bg, #040509);
-  background-image:
-    radial-gradient(circle at 50% -12%, rgba(var(--mm-mode-rgb, 168, 143, 255), 0.2), transparent 37%),
-    radial-gradient(circle at 90% 32%, rgba(100, 164, 255, 0.1), transparent 30%),
-    linear-gradient(180deg, #090b12 0%, var(--mm-bg, #040509) 58%, #030408 100%);
+  background: #000;
 }
 
 .premium-page .premium-title {

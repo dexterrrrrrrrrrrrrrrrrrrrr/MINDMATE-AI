@@ -7,9 +7,7 @@ body,
   width: 100%;
   height: 100%;
   min-height: 100vh;
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  background: #000;
   color: white;
   font-family: 'Segoe UI', sans-serif;
   overflow-x: hidden;
@@ -538,10 +536,7 @@ textarea {
   isolation: isolate;
   perspective: 1200px;
   --mm-mode-rgb: 224, 163, 219;
-  background:
-    radial-gradient(70% 64% at 54% 0%, rgba(var(--mm-mode-rgb), 0.16), transparent 68%),
-    radial-gradient(54% 54% at 96% 76%, rgba(72, 151, 255, 0.08), transparent 72%),
-    linear-gradient(145deg, #07080d 0%, #030407 48%, #080910 100%);
+  background: #000;
   transition: background 420ms ease;
 }
 
@@ -550,36 +545,24 @@ textarea {
 .chatgpt-wrapper[data-assistant-mode="personal"] { --mm-mode-rgb: 134, 224, 190; }
 
 body[data-theme="premium"] .chatgpt-wrapper {
-  background:
-    radial-gradient(70% 64% at 54% 0%, rgba(var(--mm-mode-rgb), 0.2), transparent 68%),
-    radial-gradient(52% 52% at 96% 76%, rgba(176, 83, 255, 0.1), transparent 72%),
-    linear-gradient(145deg, #110b18 0%, #06050a 52%, #100916 100%);
+  background: #000;
 }
 
 body[data-theme="blue"] .chatgpt-wrapper {
-  background:
-    radial-gradient(70% 64% at 54% 0%, rgba(var(--mm-mode-rgb), 0.18), transparent 68%),
-    radial-gradient(54% 54% at 96% 76%, rgba(72, 196, 255, 0.12), transparent 72%),
-    linear-gradient(145deg, #07121d 0%, #03070b 52%, #07131a 100%);
+  background: #000;
 }
 
 body[data-theme="sunset"] .chatgpt-wrapper {
-  background:
-    radial-gradient(70% 64% at 54% 0%, rgba(var(--mm-mode-rgb), 0.18), transparent 68%),
-    radial-gradient(48% 48% at 96% 78%, rgba(255, 122, 108, 0.12), transparent 72%),
-    linear-gradient(145deg, #160b18 0%, #07050a 50%, #17100e 100%);
+  background: #000;
 }
 
 body[data-theme="aurora"] .chatgpt-wrapper {
-  background:
-    radial-gradient(70% 64% at 54% 0%, rgba(var(--mm-mode-rgb), 0.17), transparent 68%),
-    radial-gradient(54% 54% at 96% 76%, rgba(56, 223, 181, 0.11), transparent 72%),
-    linear-gradient(145deg, #071616 0%, #030808 52%, #071416 100%);
+  background: #000;
 }
 
 .chatgpt-wrapper::before,
 .chatgpt-wrapper::after {
-  content: "";
+  content: none;
   position: absolute;
   z-index: 0;
   pointer-events: none;
@@ -1137,24 +1120,24 @@ body[data-theme="aurora"] .chatgpt-wrapper {
 
 /* 🎨 Global Themes */
 body[data-theme="dark"] {
-  background: linear-gradient(180deg, #0f0f0f, #1a1a1a);
+  background: #000;
 
 }
 
 body[data-theme="premium"] {
-  background: linear-gradient(180deg, #1a0f2e, #2e1746, #0f0f0f);
+  background: #000;
 }
 
 body[data-theme="blue"] {
-  background: linear-gradient(180deg, #2c3e50, #4ca1af);
+  background: #000;
 }
 
 body[data-theme="sunset"] {
-  background: linear-gradient(135deg, #1e1e2f, #3a1c71, #d76d77, #ffaf7b);
+  background: #000;
 }
 
 body[data-theme="aurora"] {
-  background: linear-gradient(180deg, #0f2027, #203a43, #2c5364);
+  background: #000;
 }
 
 /* Animated Gradients */
@@ -3549,7 +3532,8 @@ button {
   body,
   #root {
     height: 100%;
-    min-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
     overflow-x: hidden;
   }
 
@@ -3560,7 +3544,7 @@ button {
   }
 
   .chatgpt-wrapper {
-    height: var(--mindmate-viewport-height, 100dvh);
+    height: var(--mindmate-viewport-height, 100svh);
     overflow: hidden;
     overflow: clip;
   }
@@ -3703,16 +3687,16 @@ button {
   }
 
   .floating-input-bar.chat-mode {
-    bottom: var(--mindmate-keyboard-inset, 0px);
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
     width: 100%;
-    padding: 9px 9px calc(9px + env(safe-area-inset-bottom));
+    padding: 0 9px;
     background: linear-gradient(to top, rgba(6, 7, 11, 0.92) 60%, transparent);
     transition: none;
   }
 
   .floating-input-bar.welcome-mode {
     top: auto;
-    bottom: calc(22px + env(safe-area-inset-bottom) + var(--mindmate-keyboard-inset, 0px));
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
     width: 100%;
     max-width: none;
     padding: 0 10px;
