@@ -21,18 +21,32 @@ const VoicePulseLine = ({ isListening, stream }) => {
     let resizeObserver;
     let disposed = false;
     let smoothedLevel = 0;
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+    let canvasPixelRatio = 0;
     const barLevels = [];
 
     const resizeCanvas = () => {
       const { width, height } = canvas.getBoundingClientRect();
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      if (
+        width === canvasWidth
+        && height === canvasHeight
+        && pixelRatio === canvasPixelRatio
+      ) return;
+
+      canvasWidth = Math.max(1, width);
+      canvasHeight = Math.max(1, height);
+      canvasPixelRatio = pixelRatio;
       canvas.width = Math.max(1, Math.round(width * pixelRatio));
       canvas.height = Math.max(1, Math.round(height * pixelRatio));
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     };
 
     const draw = () => {
-      const { width, height } = canvas.getBoundingClientRect();
+      const width = canvasWidth;
+      const height = canvasHeight;
+      const now = performance.now();
       context.clearRect(0, 0, width, height);
 
       let liveLevel = 0;
@@ -75,7 +89,7 @@ const VoicePulseLine = ({ isListening, stream }) => {
           ? Math.min(frequencyData.length - 1, 2 + Math.floor((index / (barCount - 1)) * 46))
           : 0;
         const spectrum = frequencyData ? frequencyData[spectrumIndex] / 255 : 0;
-        const organicPeak = 0.82 + 0.18 * Math.sin(index * 1.73 + performance.now() * 0.006);
+        const organicPeak = 0.82 + 0.18 * Math.sin(index * 1.73 + now * 0.006);
         const boostedLevel = Math.pow(activeLevel, 0.68);
         const target = isListening && activeLevel > 0
           ? Math.min(1, boostedLevel * centerShape * organicPeak * (0.9 + spectrum * 0.52))

@@ -10,8 +10,8 @@ const SplashScreen = ({ onFinish }) => {
 
   return (
     <div className="splash-screen">
-      <img src={logo} alt="MindMate Logo" className="splash-logo" />
-      <h1 className="animated-text">MindMate</h1>
+      <img src={logo} alt="Vital Sense Logo" className="splash-logo" />
+      <h1 className="animated-text">Vital Sense</h1>
       <p className="splash-tagline">Your emotionally intelligent AI companion</p>
     </div>
   );

@@ -7,9 +7,11 @@ import {
 import LOGO2 from "../assets/LOGO2.svg";
 import "../styles/App.css";
 import { useNavigate } from "react-router-dom";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 export default function Sidebar({
   chatTitles = [],
+  modeId = "therapy",
+  modeLabel = "Therapy",
   onNewChat,
   onSelectChat,
   activeChatId,
@@ -26,7 +28,6 @@ export default function Sidebar({
   const [chatToDelete, setChatToDelete] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-  const [anim] = useState("fade-in");
   const navigate = useNavigate();
   const [menuOpenForId, setMenuOpenForId] = useState(null);
   const [toast, setToast] = useState(null);
@@ -252,9 +253,11 @@ export default function Sidebar({
 
     onSelectChat(chatId);
   };
-  const filteredChats = chatTitles.filter((chat) =>
-    (chat.title || "").toLowerCase().includes((searchTerm || "").toLowerCase())
-  );
+  const normalizedModeLabel = modeLabel?.trim() || "Therapy";
+  const normalizedSearchTerm = (searchTerm || "").trim().toLowerCase();
+  const filteredChats = useMemo(() => chatTitles.filter((chat) =>
+    (chat.title || "").toLowerCase().includes(normalizedSearchTerm)
+  ), [chatTitles, normalizedSearchTerm]);
 
 
 
@@ -284,7 +287,7 @@ export default function Sidebar({
 
           <img
             src={LOGO2}
-            alt="MindMate Logo"
+            alt="Vital Sense Logo"
             className="logo-i"
           />
 
@@ -319,7 +322,7 @@ export default function Sidebar({
         </div>
 
         {/* ---------- MIDDLE SECTION ---------- */}
-        <div className={`sidebar-middle ${anim}`}>
+        <div className="sidebar-middle">
 
           <button
             ref={newChatButtonRef}
@@ -343,7 +346,7 @@ export default function Sidebar({
               <line x1="16" y1="6" x2="22" y2="6"></line>
             </svg>
 
-            {!displayCollapsed && <span>New Chat</span>}
+            {!displayCollapsed && <span>New {normalizedModeLabel} chat</span>}
           </button>
 
           <button type="button" className="feature-btn" onClick={onOpenMoodTracker}>
@@ -384,7 +387,7 @@ export default function Sidebar({
 
             {!displayCollapsed && (
               <span className="search-placeholder">
-                Search chats...
+                Search {normalizedModeLabel} chats...
 
               </span>
             )}
@@ -414,18 +417,26 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* ---------- CHATS ---------- */}
-        <div className="chat-header">Chats</div>
+        {/* ---------- MODE-SCOPED CHATS ---------- */}
+        <div className="mode-chat-section" key={modeId} data-mode={modeId}>
+          <div className="chat-header">
+            <span className="chat-header__mode-dot" aria-hidden="true" />
+            {normalizedModeLabel} chats
+          </div>
 
-        <ul
-          className="chat-list"
-          style={{
-            pointerEvents: displayCollapsed ? "none" : "auto",
-            opacity: displayCollapsed ? 0 : 1
-          }}
-        >
+          <ul
+            className="chat-list"
+            style={{
+              pointerEvents: displayCollapsed ? "none" : "auto",
+              opacity: displayCollapsed ? 0 : 1
+            }}
+          >
           {filteredChats.length === 0 ? (
-            <li className="no-chats-message">No chats found</li>
+            <li className="no-chats-message">
+              {normalizedSearchTerm
+                ? `No matching ${normalizedModeLabel} chats`
+                : `No ${normalizedModeLabel} chats yet`}
+            </li>
           ) : (
             filteredChats.map((chat) => (
               <li
@@ -514,7 +525,8 @@ export default function Sidebar({
               </li>
             ))
           )}
-        </ul>
+          </ul>
+        </div>
       </div>
 
       {chatToDelete && (

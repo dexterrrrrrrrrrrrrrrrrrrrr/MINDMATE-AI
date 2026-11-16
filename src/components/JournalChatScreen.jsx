@@ -227,7 +227,7 @@ export default function JournalChatScreen({ user, isGuest = false }) {
   return (
     <main className="journal-page">
       <header className="journal-topbar">
-        <button type="button" className="journal-icon-button" onClick={() => navigate("/")} aria-label="Back to MindMate">
+        <button type="button" className="journal-icon-button" onClick={() => navigate("/")} aria-label="Back to Vital Sense">
           <ArrowLeft size={20} />
         </button>
         <div className="journal-brand">

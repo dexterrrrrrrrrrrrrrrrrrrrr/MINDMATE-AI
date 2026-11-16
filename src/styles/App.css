@@ -627,15 +627,13 @@ body[data-theme="aurora"] .chatgpt-wrapper {
     inset -1px 0 rgba(255, 255, 255, 0.025),
     22px 0 58px rgba(0, 0, 0, 0.32);
   background: #000;
-  backdrop-filter: blur(30px) saturate(150%);
-  -webkit-backdrop-filter: blur(30px) saturate(150%);
   color: #f4f5f7;
   padding: 16px;
   /* default */
 }
 
 .sidebar-middle {
-  transition: all 0.35s ease;
+  transition: opacity 0.24s ease, transform 0.24s ease;
 }
 
 .sidebar-middle.fade-out {
@@ -742,7 +740,7 @@ body[data-theme="aurora"] .chatgpt-wrapper {
   justify-content: left;
   margin: 0px 0;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
   padding: 4px;
 }
 
@@ -750,14 +748,14 @@ body[data-theme="aurora"] .chatgpt-wrapper {
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  transition: all 0.3s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .logo-i {
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  transition: all 0.3s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .logo-i:hover {
@@ -889,7 +887,7 @@ body[data-theme="aurora"] .chatgpt-wrapper {
   margin: 10px;
   padding: 10px 0;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
 
@@ -1009,12 +1007,45 @@ body[data-theme="aurora"] .chatgpt-wrapper {
   scrollbar-color: rgba(234, 234, 241, 0.6) transparent;
 }
 
+.mode-chat-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: modeChatsIn 180ms cubic-bezier(.22, .8, .25, 1);
+}
+
 .chat-header {
   font-weight: 600;
-  font-size: 1.2rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   margin-bottom: 10px;
   color: rgb(164, 164, 164);
   user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chat-header__mode-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(var(--mm-mode-rgb));
+  box-shadow: 0 0 10px rgba(var(--mm-mode-rgb), 0.48);
+}
+
+.mode-chat-section .chat-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+@keyframes modeChatsIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .chat-list li.clickable {
@@ -1362,6 +1393,8 @@ body[data-theme="aurora"] {
 .chat-row {
   display: flex;
   width: 100%;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 92px;
 }
 
 .chat-row.user {
@@ -1858,9 +1891,8 @@ body[data-theme="aurora"] {
   display: inline-block;
   transform-origin: center bottom;
 
-  animation:
-    height-scale 0.9s ease-in-out infinite,
-    jiggle-up-down 0.9s ease-in-out infinite;
+  animation: voice-bar-dance 0.9s ease-in-out infinite;
+  will-change: transform;
 }
 
 .bar:nth-child(1) {
@@ -1883,28 +1915,15 @@ body[data-theme="aurora"] {
   animation-delay: 0.6s
 }
 
-@keyframes height-scale {
+@keyframes voice-bar-dance {
 
   0%,
   100% {
-    height: 8px;
+    transform: translateY(0) scaleY(1);
   }
 
   50% {
-    height: 16px;
-  }
-
-}
-
-@keyframes jiggle-up-down {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-4px);
+    transform: translateY(-4px) scaleY(2);
   }
 
 }
@@ -3572,6 +3591,7 @@ button {
     align-items: stretch;
     transform: translateX(-105%);
     transition: transform 260ms cubic-bezier(.22, .8, .25, 1);
+    will-change: transform;
     box-shadow: 18px 0 55px rgba(0, 0, 0, 0.42);
     pointer-events: auto;
     z-index: 1200;
@@ -3603,8 +3623,9 @@ button {
     opacity: 1;
     pointer-events: auto;
     touch-action: none;
-    background: rgba(4, 4, 7, 0.66);
-    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, 0.76);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .topbar {
@@ -3615,6 +3636,8 @@ button {
     grid-template-rows: 42px 54px;
     gap: 6px 10px;
     background: rgba(10, 12, 18, 0.62);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
   }
 
   .topbar-menu-button {
@@ -3711,6 +3734,8 @@ button {
     padding: 3px 10px 3px 13px;
     gap: 5px;
     border-radius: 17px;
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
   }
 
   .input-box {
@@ -4446,6 +4471,7 @@ body.mindmate-chat-route .suggestions-below-input {
   .mic-btn.listening,
   .thinking-loader span,
   .sidebar-toast,
+  .mode-chat-section,
   .chat-delete-backdrop,
   .chat-delete-dialog,
   .profile-menu {

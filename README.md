@@ -1,6 +1,6 @@
-# 🧠 MindMate AI
+# 🧠 Vital Sense AI
 
-MindMate AI is an AI-powered mental wellness and productivity companion offering emotional support, goal tracking, AI journaling, and voice interactions through a conversational interface. It integrates text and voice AI to provide realistic, context-aware responses.
+Vital Sense AI is an AI-powered mental wellness and productivity companion offering emotional support, goal tracking, AI journaling, and voice interactions through a conversational interface. It integrates text and voice AI to provide realistic, context-aware responses.
 
 ## 🖥️ Deployment
 
@@ -86,7 +86,7 @@ After deployment, both `/__/auth/handler` and `/__/auth/iframe` on the Vercel do
 
 - Login with Google Authentication
 
-- Chat with MindMate AI
+- Chat with Vital Sense AI
 
 - Track goals and habits
 

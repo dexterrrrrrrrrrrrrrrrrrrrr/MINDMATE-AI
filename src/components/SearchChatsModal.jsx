@@ -16,11 +16,11 @@ export default function SearchChatsModal({
   onSelectChat,
   activeChatId,
   onNewChat,
+  modeLabel = "Therapy",
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [visible, setVisible] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [loading, setLoading] = useState(true);
   const closeTimerRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -29,13 +29,10 @@ export default function SearchChatsModal({
 
     setVisible(true);
     setClosing(false);
-    setLoading(true);
     setSearchTerm("");
 
-    const loadingTimer = setTimeout(() => setLoading(false), 260);
     const focusTimer = setTimeout(() => inputRef.current?.focus(), 30);
     return () => {
-      clearTimeout(loadingTimer);
       clearTimeout(focusTimer);
     };
   }, [isOpen]);
@@ -95,16 +92,16 @@ export default function SearchChatsModal({
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Search chats"
+        aria-label={`Search ${modeLabel} chats`}
       >
         <header className="search-header">
           <input
             ref={inputRef}
             type="search"
-            placeholder="Search chats..."
+            placeholder={`Search ${modeLabel} chats...`}
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            aria-label="Search chats"
+            aria-label={`Search ${modeLabel} chats`}
           />
           <button type="button" className="close-search" onClick={handleClose} aria-label="Close search">
             <X size={18} />
@@ -112,54 +109,44 @@ export default function SearchChatsModal({
         </header>
 
         <div className="search-content">
-          {loading ? (
-            <div className="search-skeleton" aria-label="Loading chats">
-              {[1, 2, 3, 4].map((item) => (
-                <div key={item} className="skeleton-row">
-                  <div className="skeleton-dot" />
-                  <div className="skeleton-lines">
-                    <div className="line short" />
-                    <div className="line long" />
-                  </div>
-                </div>
+          <button
+            type="button"
+            className="new-chat-row"
+            onClick={() => {
+              onNewChat();
+              handleClose();
+            }}
+          >
+            <MessageSquarePlus size={18} aria-hidden="true" />
+            <span className="new-chat-text">New {modeLabel} chat</span>
+          </button>
+
+          {Object.entries(groupedChats).map(([label, chats]) => chats.length > 0 && (
+            <section key={label} aria-labelledby={`search-group-${label.toLowerCase()}`}>
+              <h2 id={`search-group-${label.toLowerCase()}`} className="search-section">{label}</h2>
+              {chats.map((chat) => (
+                <button
+                  type="button"
+                  key={chat.id}
+                  className={`search-chat-item ${chat.id === activeChatId ? "active" : ""}`}
+                  onClick={() => {
+                    onSelectChat(chat.id);
+                    handleClose();
+                  }}
+                >
+                  <MessageCircle className="chat-icon" size={17} aria-hidden="true" />
+                  <span>{chat.title || "Untitled Chat"}</span>
+                </button>
               ))}
+            </section>
+          ))}
+
+          {!hasMatches && (
+            <div className="no-chats">
+              {searchTerm.trim()
+                ? `No matching ${modeLabel} chats`
+                : `No ${modeLabel} chats yet`}
             </div>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="new-chat-row"
-                onClick={() => {
-                  onNewChat();
-                  handleClose();
-                }}
-              >
-                <MessageSquarePlus size={18} aria-hidden="true" />
-                <span className="new-chat-text">New Chat</span>
-              </button>
-
-              {Object.entries(groupedChats).map(([label, chats]) => chats.length > 0 && (
-                <section key={label} aria-labelledby={`search-group-${label.toLowerCase()}`}>
-                  <h2 id={`search-group-${label.toLowerCase()}`} className="search-section">{label}</h2>
-                  {chats.map((chat) => (
-                    <button
-                      type="button"
-                      key={chat.id}
-                      className={`search-chat-item ${chat.id === activeChatId ? "active" : ""}`}
-                      onClick={() => {
-                        onSelectChat(chat.id);
-                        handleClose();
-                      }}
-                    >
-                      <MessageCircle className="chat-icon" size={17} aria-hidden="true" />
-                      <span>{chat.title || "Untitled Chat"}</span>
-                    </button>
-                  ))}
-                </section>
-              ))}
-
-              {!hasMatches && <div className="no-chats">No chats found</div>}
-            </>
           )}
         </div>
       </section>

@@ -68,7 +68,7 @@ const Topbar = ({
             />
           </span>
           <span className="brand-logo__copy">
-            <strong className="brand-title">MindMate</strong>
+            <strong className="brand-title">Vital Sense</strong>
             <small>Choose your space</small>
           </span>
         </div>
@@ -114,7 +114,7 @@ const Topbar = ({
                 }}
               >
                 <Star size={18} />
-                MindMate Pro
+                Vital Sense Pro
               </button>
 
               <hr className="profile-menu__divider" />

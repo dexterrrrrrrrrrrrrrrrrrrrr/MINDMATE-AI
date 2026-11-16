@@ -30,7 +30,7 @@ export const buildModeAwareMessages = ({
   const mode = getAssistantMode(modeId);
   const task = typeof taskInstruction === "string" ? taskInstruction.trim() : "";
   const responseGuide = [
-    `The user selected ${mode.label} mode in the MindMate interface.`,
+    `The user selected ${mode.label} mode in the Vital Sense interface.`,
     "For this reply, follow the response guide below without mentioning the mode instructions themselves.",
     mode.systemInstruction,
     task,

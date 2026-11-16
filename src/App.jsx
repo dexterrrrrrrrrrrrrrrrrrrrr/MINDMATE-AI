@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
+import React, { lazy, Suspense, useState, useEffect, useRef, useMemo, startTransition } from "react";
 import { FaArrowDown } from "react-icons/fa";
 import {
   auth,
@@ -26,7 +26,6 @@ import { updateDoc } from "firebase/firestore";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import SplashScreen from "./components/SplashScreen";
-import LoginScreen from "./components/LoginScreen";
 import MoodTracker from "./components/MoodTracker";
 import "./styles/App.css";
 import { useNavigate } from "react-router-dom";
@@ -69,6 +68,7 @@ const JournalChatScreen = lazy(() => import("./components/JournalChatScreen"));
 const Premium = lazy(() => import("./components/Premium"));
 const VoiceCloud = lazy(() => import("./components/VoiceCloud"));
 const GoalsPage = lazy(() => import("./components/GoalsPage"));
+const LoginScreen = lazy(() => import("./components/LoginScreen"));
 
 const AUTH_REDIRECT_PENDING_KEY = "mindmate.authRedirectPending";
 const AUTH_RETURN_PATH_KEY = "mindmate.authReturnPath";
@@ -100,6 +100,45 @@ const omitMarkdownMetadata = ({ node, inline, ...props }) => {
   return props;
 };
 
+const CHAT_MARKDOWN_COMPONENTS = {
+  p: (props) => (
+    <p className="chat-markdown-paragraph" {...omitMarkdownMetadata(props)} />
+  ),
+  strong: (props) => (
+    <strong className="chat-markdown-strong" {...omitMarkdownMetadata(props)} />
+  ),
+  ul: (props) => (
+    <ul
+      className="chat-markdown-list chat-markdown-list--unordered"
+      {...omitMarkdownMetadata(props)}
+    />
+  ),
+  ol: (props) => (
+    <ol
+      className="chat-markdown-list chat-markdown-list--ordered"
+      {...omitMarkdownMetadata(props)}
+    />
+  ),
+  li: (props) => (
+    <li className="chat-markdown-list-item" {...omitMarkdownMetadata(props)} />
+  ),
+  code: (props) => props.inline ? (
+    <code className="chat-markdown-inline-code" {...omitMarkdownMetadata(props)} />
+  ) : (
+    <pre className="chat-markdown-code-block">
+      <code {...omitMarkdownMetadata(props)} />
+    </pre>
+  ),
+};
+
+const ChatMarkdown = React.memo(function ChatMarkdown({ text }) {
+  return (
+    <ReactMarkdown components={CHAT_MARKDOWN_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+});
+
 function App() {
   // User & UI state
   const [user, setUser] = useState(null);
@@ -116,9 +155,9 @@ function App() {
   const [assistantModeId, setAssistantModeId] = useState(
     () => getAssistantModeId(localStorage.getItem("mindmate.assistantMode"))
   );
-  const [modeSaving, setModeSaving] = useState(false);
   const assistantMode = getAssistantMode(assistantModeId);
   const chatBodyRef = useRef(null);
+  const userScrolledUpRef = useRef(false);
   const [chatLog, setChatLog] = useState([]);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [closingShare, setClosingShare] = useState(false);
@@ -283,15 +322,20 @@ function App() {
     }
   };
 
-  const displayedChats = user
-    ? chatTitles
-      .filter(chat => chat.messages?.length > 0)
-      .map((chat) =>
+  const displayedChats = useMemo(() => {
+    if (!user) return [];
+
+    return chatTitles
+      .filter((chat) => (
+        chat.messages?.length > 0
+        && getAssistantModeId(chat.assistantMode) === assistantModeId
+      ))
+      .map((chat) => (
         chat.id === activeChatId
           ? { ...chat, title: titleTyping || fullTitle || chat.title }
           : chat
-      )
-    : [];
+      ));
+  }, [activeChatId, assistantModeId, chatTitles, fullTitle, titleTyping, user]);
 
 
   // ✅ Stop typing animation
@@ -448,11 +492,13 @@ function App() {
   // Auto-scroll only if user is near bottom
   useEffect(() => {
     const container = chatBodyRef.current;
-    if (!container) return;
+    if (!container || userScrolledUp) return undefined;
 
-    if (!userScrolledUp) {
+    const scrollFrame = window.requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
-    }
+    });
+
+    return () => window.cancelAnimationFrame(scrollFrame);
   }, [chatLog, userScrolledUp]);
 
   useEffect(() => {
@@ -483,7 +529,11 @@ function App() {
 
       const atBottom = distanceFromBottom < 120;
 
-      setUserScrolledUp(!atBottom);
+      const nextUserScrolledUp = !atBottom;
+      if (userScrolledUpRef.current !== nextUserScrolledUp) {
+        userScrolledUpRef.current = nextUserScrolledUp;
+        setUserScrolledUp(nextUserScrolledUp);
+      }
     };
 
     chatBody.addEventListener("scroll", handleScroll);
@@ -496,6 +546,7 @@ function App() {
     const chatBody = chatBodyRef.current;
     if (chatBody) {
       chatBody.scrollTop = chatBody.scrollHeight;
+      userScrolledUpRef.current = false;
       setUserScrolledUp(false);
     }
   };
@@ -523,7 +574,7 @@ function App() {
     const updateElapsed = () => {
       setDictationElapsed(Math.floor((Date.now() - startedAt) / 1000));
     };
-    const interval = window.setInterval(updateElapsed, 250);
+    const interval = window.setInterval(updateElapsed, 1000);
     updateElapsed();
 
     return () => window.clearInterval(interval);
@@ -652,11 +703,17 @@ function App() {
     const root = document.documentElement;
     const body = document.body;
     const visualViewport = window.visualViewport;
+    const mobileQuery = window.matchMedia("(max-width: 768px)");
+    const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     let animationFrame = 0;
     let followUpFrame = 0;
     let composerAnimation = null;
+    let pendingComposerTop = null;
     let frozenChatScrollTop = null;
     let releaseScrollTimer = 0;
+    let lastViewportHeight = null;
+    let lastViewportOffset = null;
+    let lastKeyboardOpen = null;
     let restingViewportHeight = Math.round(
       visualViewport?.height || document.documentElement.clientHeight
     );
@@ -678,42 +735,53 @@ function App() {
     };
 
     const updateViewport = () => {
-      const motionTargetBeforeUpdate = composerRef.current?.querySelector(".input-inner");
-      const previousComposerTop = motionTargetBeforeUpdate?.getBoundingClientRect().top ?? null;
+      if (pendingComposerTop === null) {
+        const motionTarget = composerRef.current?.querySelector(".input-inner");
+        pendingComposerTop = motionTarget?.getBoundingClientRect().top ?? null;
+      }
 
-      window.cancelAnimationFrame(animationFrame);
       window.cancelAnimationFrame(followUpFrame);
+      followUpFrame = 0;
+      if (animationFrame) return;
+
       animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        const previousComposerTop = pendingComposerTop;
+        pendingComposerTop = null;
         const viewportHeight = Math.round(
           visualViewport?.height || document.documentElement.clientHeight
         );
+        const viewportOffset = Math.round(visualViewport?.offsetTop || 0);
         const composerFocused = document.activeElement?.classList?.contains("input-box");
         if (!composerFocused) restingViewportHeight = viewportHeight;
-        const keyboardOpen = window.matchMedia("(max-width: 768px)").matches
+        const keyboardOpen = mobileQuery.matches
           && composerFocused
           && restingViewportHeight - viewportHeight > 80;
+        const heightChanged = viewportHeight !== lastViewportHeight;
+        const offsetChanged = viewportOffset !== lastViewportOffset;
+        const keyboardStateChanged = keyboardOpen !== lastKeyboardOpen;
 
-        // Follow the browser's actually visible viewport. This keeps the input
-        // above both the software keyboard and Chrome's bottom controls.
-        root.style.setProperty("--mindmate-viewport-height", `${viewportHeight}px`);
-        root.style.setProperty("--mindmate-visible-height", `${viewportHeight}px`);
-        root.style.setProperty("--mindmate-keyboard-inset", "0px");
-        root.style.setProperty(
-          "--mindmate-viewport-offset-top",
-          `${Math.round(visualViewport?.offsetTop || 0)}px`
-        );
-        root.style.setProperty("--vh", `${viewportHeight * 0.01}px`);
-        root.dataset.keyboardOpen = keyboardOpen ? "true" : "false";
+        // Only write viewport values that changed. Mobile browsers can emit
+        // several resize/scroll events for a single keyboard frame.
+        if (heightChanged) {
+          root.style.setProperty("--mindmate-viewport-height", `${viewportHeight}px`);
+        }
+        if (offsetChanged) {
+          root.style.setProperty("--mindmate-viewport-offset-top", `${viewportOffset}px`);
+        }
+        if (keyboardStateChanged) {
+          root.dataset.keyboardOpen = keyboardOpen ? "true" : "false";
+        }
 
         if (frozenChatScrollTop !== null) {
           window.clearTimeout(releaseScrollTimer);
           releaseScrollTimer = window.setTimeout(() => {
             frozenChatScrollTop = null;
-          }, 280);
+          }, 320);
         }
 
         const nextMotionTarget = composerRef.current?.querySelector(".input-inner");
-        if (previousComposerTop !== null && nextMotionTarget) {
+        if ((heightChanged || offsetChanged) && previousComposerTop !== null && nextMotionTarget) {
           // Continue from the currently visible position during the keyboard's
           // multi-frame resize, then ease only the composer to its new home.
           composerAnimation?.cancel();
@@ -721,8 +789,8 @@ function App() {
 
           const nextComposerTop = nextMotionTarget.getBoundingClientRect().top;
           const delta = previousComposerTop - nextComposerTop;
-          const shouldAnimate = window.matchMedia("(max-width: 768px)").matches
-            && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          const shouldAnimate = mobileQuery.matches
+            && !reducedMotionQuery.matches
             && Math.abs(delta) > 1
             && Math.abs(delta) < viewportHeight;
 
@@ -746,11 +814,13 @@ function App() {
           }
         }
 
+        lastViewportHeight = viewportHeight;
+        lastViewportOffset = viewportOffset;
+        lastKeyboardOpen = keyboardOpen;
+
         followUpFrame = window.requestAnimationFrame(() => {
-          if (
-            frozenChatScrollTop !== null
-            && chatBodyRef.current
-          ) {
+          followUpFrame = 0;
+          if (frozenChatScrollTop !== null && chatBodyRef.current) {
             chatBodyRef.current.scrollTop = frozenChatScrollTop;
           }
         });
@@ -780,10 +850,7 @@ function App() {
       body.classList.remove("mindmate-chat-route");
       delete root.dataset.keyboardOpen;
       root.style.removeProperty("--mindmate-viewport-height");
-      root.style.removeProperty("--mindmate-visible-height");
-      root.style.removeProperty("--mindmate-keyboard-inset");
       root.style.removeProperty("--mindmate-viewport-offset-top");
-      root.style.removeProperty("--vh");
     };
   }, [location.pathname]);
 
@@ -807,10 +874,16 @@ function App() {
   useEffect(() => {
     const composer = composerRef.current;
     if (!composer || location.pathname !== "/") return undefined;
+    let lastComposerHeight = 0;
 
-    const updateComposerHeight = () => {
-      const height = Math.ceil(composer.getBoundingClientRect().height);
-      if (height > 0) {
+    const updateComposerHeight = (entries) => {
+      const entry = entries?.[0];
+      const borderBox = Array.isArray(entry?.borderBoxSize)
+        ? entry.borderBoxSize[0]
+        : entry?.borderBoxSize;
+      const height = Math.ceil(borderBox?.blockSize || composer.getBoundingClientRect().height);
+      if (height > 0 && height !== lastComposerHeight) {
+        lastComposerHeight = height;
         document.documentElement.style.setProperty("--mindmate-composer-height", `${height}px`);
       }
     };
@@ -876,54 +949,57 @@ function App() {
     setShowChips(true);
     setShowMoodTracker(isMoodTracker);
     setIsThinking(false);
+    userScrolledUpRef.current = false;
+    setUserScrolledUp(false);
     if (window.matchMedia("(max-width: 768px)").matches) setSidebarOpen(false);
   };
 
-  const handleAssistantModeChange = async (nextModeId) => {
+  const handleAssistantModeChange = (nextModeId) => {
     const normalizedModeId = getAssistantModeId(nextModeId);
-    if (normalizedModeId === assistantModeId || modeSaving) return;
+    if (normalizedModeId === assistantModeId) return;
 
-    const nextMode = getAssistantMode(normalizedModeId);
-    const hasConversation = chatLog.some((message) => message.type !== "mode-change");
-    const nextMessages = hasConversation
-      ? [
-          ...chatLog,
-          {
-            from: "system",
-            type: "mode-change",
-            mode: normalizedModeId,
-            text: `${nextMode.label} mode started. New replies will use a fresh ${nextMode.label.toLowerCase()} context.`,
-          },
-        ]
-      : chatLog;
+    const previousModeId = assistantModeId;
+    const previousChatId = activeChatId;
+    const previousMessages = chatLog;
+    const hasConversation = previousMessages.some((message) => (
+      message.from === "user" || message.from === "bot"
+    ));
 
     setAssistantModeId(normalizedModeId);
     localStorage.setItem("mindmate.assistantMode", normalizedModeId);
-    if (hasConversation) setChatLog(nextMessages);
+    setActiveChatId(null);
+    setChatLog([]);
+    setFullTitle("");
+    setTitleTyping("");
+    setHasGeneratedTitle(false);
+    setShowChips(true);
+    setShowMoodTracker(false);
+    setSuggestionIndex(null);
+    userScrolledUpRef.current = false;
+    setUserScrolledUp(false);
 
-    if (user?.uid && activeChatId) {
-      setModeSaving(true);
-      try {
-        await updateDoc(doc(db, "users", user.uid, "chats", activeChatId), {
-          messages: nextMessages,
-          assistantMode: normalizedModeId,
-          updatedAt: serverTimestamp(),
-        });
-      } catch (error) {
-        console.error("Could not save assistant mode:", error);
-        if (hasConversation) {
-          setChatLog((previous) => [
-            ...previous,
-            {
-              from: "system",
-              type: "mode-change",
-              text: "This mode is active now, but it could not be saved yet. It will retry with your next message.",
-            },
-          ]);
-        }
-      } finally {
-        setModeSaving(false);
-      }
+    // Save the conversation under the mode where it was created. The write is
+    // intentionally backgrounded so switching sections never waits on network.
+    if (user?.uid && hasConversation) {
+      const savePreviousConversation = previousChatId
+        ? updateDoc(doc(db, "users", user.uid, "chats", previousChatId), {
+            messages: previousMessages,
+            assistantMode: previousModeId,
+            updatedAt: serverTimestamp(),
+          })
+        : addDoc(collection(db, "users", user.uid, "chats"), {
+            title: generateTitleFromText(
+              previousMessages.find((message) => message.from === "user")?.text || "New Chat"
+            ),
+            messages: previousMessages,
+            assistantMode: previousModeId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+      savePreviousConversation.catch((error) => {
+        console.error("Could not save the previous mode conversation:", error);
+      });
     }
   };
 
@@ -1049,17 +1125,21 @@ function App() {
       }
 
       let currentText = "";
-      for (let i = 0; i < fullReply.length; i++) {
+      const charactersPerFrame = 4;
+      for (let index = 0; index < fullReply.length; index += charactersPerFrame) {
         if (stopTypingRef.current || requestGenerationRef.current !== requestGeneration) break;
-        currentText += fullReply[i];
+        currentText = fullReply.slice(0, index + charactersPerFrame);
+        const frameText = currentText;
 
-        setChatLog((prev) => {
-          const noTyping = prev.filter((msg) => !msg.typing);
-          return [...noTyping, { from: "bot", text: currentText, typing: true }];
+        startTransition(() => {
+          setChatLog((prev) => {
+            const noTyping = prev.filter((msg) => !msg.typing);
+            return [...noTyping, { from: "bot", text: frameText, typing: true }];
+          });
         });
 
         currentTypingTextRef.current = currentText;
-        await new Promise((r) => setTimeout(r, 20));
+        await new Promise((resolve) => setTimeout(resolve, 36));
       }
 
       if (stopTypingRef.current || requestGenerationRef.current !== requestGeneration) return;
@@ -1146,6 +1226,8 @@ function App() {
       setHasGeneratedTitle(true);
 
       setShowMoodTracker(false);
+      userScrolledUpRef.current = false;
+      setUserScrolledUp(false);
       if (window.matchMedia("(max-width: 768px)").matches) setSidebarOpen(false);
     }
   };
@@ -1233,7 +1315,11 @@ function App() {
 
     // If active chat was deleted, pick another chat or reset
     if (activeChatId === chatId) {
-      const remaining = chatTitles.filter((c) => c.id !== chatId);
+      const remaining = chatTitles.filter((chat) => (
+        chat.id !== chatId
+        && chat.messages?.length > 0
+        && getAssistantModeId(chat.assistantMode) === assistantModeId
+      ));
       if (remaining.length) {
         const nextChat = remaining[0];
         const nextModeId = getAssistantModeId(nextChat.assistantMode);
@@ -1253,6 +1339,8 @@ function App() {
         setHasGeneratedTitle(false);
         setShowChips(true);
       }
+      userScrolledUpRef.current = false;
+      setUserScrolledUp(false);
     }
 
     return true;
@@ -1340,6 +1428,8 @@ function App() {
                   if (window.matchMedia("(max-width: 768px)").matches) setSidebarOpen(false);
                 }}
                 chatTitles={displayedChats}
+                modeId={assistantModeId}
+                modeLabel={assistantMode.label}
                 onSelectChat={handleSelectChat}
                 activeChatId={activeChatId}
                 onDeleteChat={handleDeleteChat}
@@ -1368,8 +1458,8 @@ function App() {
                     value={assistantModeId}
                     onChange={handleAssistantModeChange}
                     options={ASSISTANT_MODE_OPTIONS}
-                    disabled={isTyping || isThinking || listening || modeSaving}
-                    ariaLabel="Choose how MindMate should respond"
+                    disabled={isTyping || isThinking || listening}
+                    ariaLabel="Choose how Vital Sense should respond"
                     className="topbar-mode-switcher"
                   />
                 )}
@@ -1388,7 +1478,8 @@ function App() {
                 isOpen={showSearchModal}
                 onNewChat={() => handleNewChat(false)}
                 onClose={() => setShowSearchModal(false)}
-                chatTitles={chatTitles}
+                chatTitles={displayedChats}
+                modeLabel={assistantMode.label}
                 activeChatId={activeChatId}
                 onSelectChat={handleSelectChat}
               />
@@ -1433,47 +1524,7 @@ function App() {
                                 className={`chat-message-bubble ${isBot ? "chat-message-bubble--bot" : "chat-message-bubble--user"}`}
                               >
                                 {isBot ? (
-                                  <ReactMarkdown
-                                    components={{
-                                      p: (props) => (
-                                        <p className="chat-markdown-paragraph" {...omitMarkdownMetadata(props)} />
-                                      ),
-                                      strong: (props) => (
-                                        <strong
-                                          className="chat-markdown-strong"
-                                          {...omitMarkdownMetadata(props)}
-                                        />
-                                      ),
-                                      ul: (props) => (
-                                        <ul
-                                          className="chat-markdown-list chat-markdown-list--unordered"
-                                          {...omitMarkdownMetadata(props)}
-                                        />
-                                      ),
-                                      ol: (props) => (
-                                        <ol
-                                          className="chat-markdown-list chat-markdown-list--ordered"
-                                          {...omitMarkdownMetadata(props)}
-                                        />
-                                      ),
-                                      li: (props) => (
-                                        <li className="chat-markdown-list-item" {...omitMarkdownMetadata(props)} />
-                                      ),
-                                      code: (props) =>
-                                        props.inline ? (
-                                          <code
-                                            className="chat-markdown-inline-code"
-                                            {...omitMarkdownMetadata(props)}
-                                          />
-                                        ) : (
-                                          <pre className="chat-markdown-code-block">
-                                            <code {...omitMarkdownMetadata(props)} />
-                                          </pre>
-                                        ),
-                                    }}
-                                  >
-                                    {msg.text}
-                                  </ReactMarkdown>
+                                  <ChatMarkdown text={msg.text} />
                                 ) : (
                                   <p className="chat-message-text">{msg.text}</p>
                                 )}
@@ -1653,7 +1704,7 @@ function App() {
                     </button>
                     {isThinking && (
                       <div className="chat-row bot">
-                        <div className="mindmate-thinking" role="status" aria-label="MindMate is thinking">
+                        <div className="mindmate-thinking" role="status" aria-label="Vital Sense is thinking">
                           <span />
                           <span />
                           <span />
@@ -1671,7 +1722,7 @@ function App() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="share-header">
-                      <h2>MindMate Mental Health System</h2>
+                      <h2>Vital Sense Mental Health System</h2>
 
                       <button className="share-close" onClick={closeShareModal}>
                         <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
@@ -1694,7 +1745,7 @@ function App() {
 
                       {/* Watermark like ChatGPT */}
                       <div className="preview-watermark">
-                        MindMate
+                        Vital Sense
                       </div>
 
                     </div>
@@ -1808,9 +1859,10 @@ function App() {
                           setInput(e.target.value);
                           const textarea = e.currentTarget;
                           textarea.style.height = "auto";
-                          const nextHeight = Math.min(textarea.scrollHeight, 120);
+                          const contentHeight = textarea.scrollHeight;
+                          const nextHeight = Math.min(contentHeight, 120);
                           textarea.style.height = `${nextHeight}px`;
-                          textarea.style.overflowY = textarea.scrollHeight > 120 ? "auto" : "hidden";
+                          textarea.style.overflowY = contentHeight > 120 ? "auto" : "hidden";
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {

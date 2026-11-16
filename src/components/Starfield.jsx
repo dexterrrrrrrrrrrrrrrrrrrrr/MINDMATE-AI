@@ -16,11 +16,14 @@ const Starfield = () => {
     let depth = 0;
     let animationFrame = null;
     let resizeFrame = null;
+    let resizeTimer = null;
     let lastTime = performance.now();
     let cameraX = 0;
     let cameraY = 0;
     let targetCameraX = 0;
     let targetCameraY = 0;
+    let atmosphere = null;
+    let isMobile = false;
 
     const createStar = (randomDepth = true) => ({
       x: (Math.random() - 0.5) * width * 2.1,
@@ -42,21 +45,15 @@ const Starfield = () => {
       width = Math.max(window.innerWidth, 1);
       height = Math.max(window.innerHeight, 1);
       depth = Math.max(width, height) * 1.15;
-      const mobile = width <= 768;
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.5);
+      isMobile = width <= 768;
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.5);
 
       canvas.width = Math.round(width * pixelRatio);
       canvas.height = Math.round(height * pixelRatio);
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      createStars();
-    };
-
-    const paintBackground = () => {
-      context.clearRect(0, 0, width, height);
-
-      const atmosphere = context.createRadialGradient(
+      atmosphere = context.createRadialGradient(
         width * 0.54,
         height * 0.48,
         0,
@@ -67,6 +64,12 @@ const Starfield = () => {
       atmosphere.addColorStop(0, "rgba(26, 31, 46, 0.24)");
       atmosphere.addColorStop(0.38, "rgba(9, 15, 27, 0.12)");
       atmosphere.addColorStop(1, "rgba(2, 2, 3, 0)");
+      createStars();
+    };
+
+    const paintBackground = () => {
+      context.clearRect(0, 0, width, height);
+
       context.fillStyle = atmosphere;
       context.fillRect(0, 0, width, height);
     };
@@ -85,7 +88,7 @@ const Starfield = () => {
       const focalLength = Math.min(width, height) * 0.72;
 
       for (const star of stars) {
-        if (animate) star.z -= (width <= 768 ? 1.05 : 1.45) * delta;
+        if (animate) star.z -= (isMobile ? 1.05 : 1.45) * delta;
         if (star.z <= 1) Object.assign(star, createStar(false));
 
         const scale = focalLength / star.z;
@@ -140,11 +143,24 @@ const Starfield = () => {
     };
 
     const handleResize = () => {
-      if (resizeFrame) cancelAnimationFrame(resizeFrame);
-      resizeFrame = requestAnimationFrame(() => {
-        resize();
-        if (reducedMotionQuery.matches) draw();
-      });
+      const commitResize = () => {
+        if (resizeFrame) cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(() => {
+          resizeFrame = null;
+          resize();
+          if (reducedMotionQuery.matches) draw();
+        });
+      };
+
+      if (window.innerWidth <= 768) {
+        if (resizeTimer) window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(() => {
+          resizeTimer = null;
+          commitResize();
+        }, 120);
+      } else {
+        commitResize();
+      }
     };
 
     const handlePointerMove = (event) => {
@@ -174,6 +190,7 @@ const Starfield = () => {
     return () => {
       stop();
       if (resizeFrame) cancelAnimationFrame(resizeFrame);
+      if (resizeTimer) window.clearTimeout(resizeTimer);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointermove", handlePointerMove);
       document.removeEventListener("visibilitychange", handleVisibility);

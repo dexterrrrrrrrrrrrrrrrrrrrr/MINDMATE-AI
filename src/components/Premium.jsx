@@ -38,10 +38,10 @@ const Premium = () => {
       key: paymentKey,
       amount: amount * 100,
       currency: "INR",
-      name: "MindMate",
+      name: "Vital Sense",
       description: planName,
       handler: function () {
-        setModalMessage("Payment received. Thank you for upgrading to MindMate Pro.");
+        setModalMessage("Payment received. Thank you for upgrading to Vital Sense Pro.");
         setIsModalOpen(true);
       },
       theme: {
@@ -110,7 +110,7 @@ const Premium = () => {
         transition={{ duration: 0.6 }}
         className="premium-title"
       >
-        MindMate Pro
+        Vital Sense Pro
       </Motion.h1>
 
       <p className="premium-sub">Unlock the full potential with Pro plans</p>

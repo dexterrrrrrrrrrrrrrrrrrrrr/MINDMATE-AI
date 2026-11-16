@@ -301,7 +301,7 @@ export default function SettingsModal({
   if (!isOpen && !closing) return null;
 
   const currentUser = auth.currentUser;
-  const accountName = currentUser?.displayName || (currentUser ? "MindMate account" : "Guest session");
+  const accountName = currentUser?.displayName || (currentUser ? "Vital Sense account" : "Guest session");
   const accountDetail = currentUser?.email || "Your conversations are stored on this device only.";
   const accountInitial = (currentUser?.displayName || currentUser?.email || "G").trim().charAt(0).toUpperCase();
 
@@ -364,7 +364,7 @@ export default function SettingsModal({
             {active === "general" && (
               <>
                 <h2 id="settings-title">General</h2>
-                <p className="settings-description">Adjust how MindMate looks on this device.</p>
+                <p className="settings-description">Adjust how Vital Sense looks on this device.</p>
                 <section className="settings-surface" aria-labelledby="settings-theme-label">
                   <div className="settings-row-copy">
                     <h3 id="settings-theme-label">Theme</h3>
@@ -392,7 +392,7 @@ export default function SettingsModal({
             {active === "voice" && (
               <>
                 <h2 id="settings-title">Voice</h2>
-                <p className="settings-description">Choose how MindMate sounds in chat and voice conversations.</p>
+                <p className="settings-description">Choose how Vital Sense sounds in chat and voice conversations.</p>
 
                 <section className="settings-surface settings-control-row">
                   <label className="settings-row-copy" htmlFor="settings-default-voice">
@@ -446,7 +446,7 @@ export default function SettingsModal({
                 <section className="settings-surface settings-account-action">
                   <div className="settings-row-copy">
                     <h3>Session</h3>
-                    <p>Sign out of MindMate on this device.</p>
+                    <p>Sign out of Vital Sense on this device.</p>
                   </div>
                   <button
                     type="button"
@@ -462,7 +462,7 @@ export default function SettingsModal({
                 <section className="settings-danger-zone">
                   <div className="settings-row-copy">
                     <h3>Delete account</h3>
-                    <p>Permanently remove your account and saved MindMate data.</p>
+                    <p>Permanently remove your account and saved Vital Sense data.</p>
                   </div>
                   <button
                     type="button"
@@ -532,7 +532,7 @@ export default function SettingsModal({
           <div className="settings-confirm-backdrop">
             <div className="settings-confirm-dialog" role="status" aria-live="polite">
               <h3>Account deleted</h3>
-              <p>Your MindMate account has been permanently removed.</p>
+              <p>Your Vital Sense account has been permanently removed.</p>
               <div className="settings-dialog-actions single">
                 <button type="button" className="settings-dialog-primary" onClick={handleClose}>Done</button>
               </div>

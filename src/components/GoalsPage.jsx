@@ -320,7 +320,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
             {/* Center: Logo */}
             <div className="brand-logo flex items-center gap-2">
                 <img src={LOGO2} alt="Logo" className="logo-icon h-8 w-auto" />
-                <h2 className="brand-title text-white font-bold text-lg">MindMate</h2>
+                <h2 className="brand-title text-white font-bold text-lg">Vital Sense</h2>
             </div>
 
             {/* HEADER */}

@@ -285,7 +285,7 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin, googleSubmitting = false, au
 
       <div className="login-box">
         <h1 className="title">
-          Welcome to <span className="highlight">MindMate</span>
+          Welcome to <span className="highlight">Vital Sense</span>
         </h1>
         <p className="subtitle">Your emotional wellness & career assistant</p>
 
