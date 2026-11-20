@@ -1,27 +1,42 @@
-// src/firebase.js
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, signInWithPopup, signOut } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  getAuth,
+  GoogleAuthProvider,
+  setPersistence,
+  signInWithRedirect,
+  signOut,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+const firebaseHostingAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim();
+const productionAppDomain = import.meta.env.VITE_APP_DOMAIN?.trim();
+const currentHostname = typeof window === "undefined" ? "" : window.location.hostname;
+const authDomain = currentHostname === productionAppDomain
+  ? productionAppDomain
+  : firebaseHostingAuthDomain;
 const firebaseConfig = {
-  apiKey: "AIzaSyDqFZo4GDMxM4AERs5PQD2NEeGukyLMPxA",
-  authDomain: "mind-mate-94675.firebaseapp.com",
-  projectId: "mind-mate-94675",
-  storageBucket: "mind-mate-94675.appspot.com",
-  messagingSenderId: "1029632166505",
-  appId: "1:1029632166505:web:4d5409368adf6d66def0f8",
-  measurementId: "G-1XCEPRHZR9"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.trim(),
+  authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim(),
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim(),
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim(),
+  appId: import.meta.env.VITE_FIREBASE_APP_ID?.trim(),
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID?.trim(),
 };
 
-const app = initializeApp(firebaseConfig);
+export const firebaseEnabled = import.meta.env.VITE_GUEST_ONLY !== "true"
+  && Boolean(firebaseConfig.apiKey && authDomain && firebaseConfig.projectId && firebaseConfig.appId);
+const app = firebaseEnabled ? initializeApp(firebaseConfig) : null;
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
 
-// ✅ Auth
-export const auth = getAuth(app);
-
-// ✅ Google provider with proper scopes
 export const provider = new GoogleAuthProvider();
-provider.addScope("profile"); // needed for photoURL & displayName
-provider.addScope("email");   // optional, usually already included
-export const db = getFirestore(app);
+provider.addScope("profile");
+provider.addScope("email");
+provider.setCustomParameters({ prompt: "select_account" });
 
-export { signInWithRedirect, signInWithPopup, signOut };
+export const prepareAuthSession = () => setPersistence(auth, browserLocalPersistence);
+export const authRedirectDomain = authDomain;
+
+export { signInWithRedirect, signOut };

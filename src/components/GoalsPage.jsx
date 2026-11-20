@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import {
     Plus,
     CheckCircle,
@@ -16,25 +16,47 @@ import {
     Star,
 } from "lucide-react";
 import "../styles/GoalsPage.css";
-import { collection, addDoc, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import LOGO2 from "../assets/LOGO2.svg";
-import OpenAI from "openai";
+import { AI_API_URL } from "../config";
 import { deleteDoc } from "firebase/firestore";
+import { buildModeAwareMessages } from "../utils/assistantRequest";
 
 
+const generateGoalSuggestions = async (category, assistantModeId) => {
 
+    const messages = buildModeAwareMessages({
+        modeId: assistantModeId,
+        messages: [
+            {
+                role: "user",
+                content: `Generate 3 small daily goals for ${category}`,
+            },
+        ],
+        taskInstruction: `This is a focused goal-planning request for the ${category} category. Return exactly three realistic, specific daily goals. Keep each goal brief and actionable.`,
+    });
 
-const a4fApiKey = "ddc-a4f-ea451e35a968496890c6b79e89ab832f";
-const a4fBaseUrl = "https://api.a4f.co/v1";
+    const response = await fetch(
+        AI_API_URL,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(messages),
+        }
+    );
 
-const a4fClient = new OpenAI({
-    apiKey: a4fApiKey,
-    baseURL: a4fBaseUrl,
-    dangerouslyAllowBrowser: true,
-});
+    if (!response.ok) {
+        throw new Error(`Goal suggestions failed with ${response.status}`);
+    }
 
+    const data = await response.json();
+
+    return data.content;
+};
 
 const quotes = [
     "Success is built on daily discipline.",
@@ -78,7 +100,7 @@ const pillars = [
     { title: "Create Custom", icon: <Plus size={20} />, tip: "A goal without a plan is just a wish. Craft it, chase it, and celebrate every step." },
 ];
 
-const GoalsPage = ({ floatingInputBar }) => {
+const GoalsPage = ({ assistantModeId = "therapy" }) => {
     const [goals, setGoals] = useState([]);
     const [showWizard, setShowWizard] = useState(false);
     const [newGoal, setNewGoal] = useState({
@@ -89,7 +111,7 @@ const GoalsPage = ({ floatingInputBar }) => {
     const [dailyQuote, setDailyQuote] = useState("");
 
     const removeGoal = async (goalId) => {
-        const user = auth.currentUser;
+        const user = auth?.currentUser;
         if (!user) return;
 
         try {
@@ -135,9 +157,9 @@ const GoalsPage = ({ floatingInputBar }) => {
             return;
         }
 
-        const user = auth.currentUser;
+        const user = auth?.currentUser;
         if (!user) {
-            alert("Please login to save goals.");
+            alert("Saving goals is unavailable in guest mode.");
             return;
         }
 
@@ -166,6 +188,7 @@ const GoalsPage = ({ floatingInputBar }) => {
 
     // Load user goals
     useEffect(() => {
+        if (!auth) return undefined;
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userGoalsRef = collection(db, "users", user.uid, "goals");
@@ -181,16 +204,37 @@ const GoalsPage = ({ floatingInputBar }) => {
     }, []);
 
     // Called when pillar clicked (non-custom)
-    const openTopicMode = (pillar) => {
-        // If clicking same pillar again, keep it open
+    const openTopicMode = async (pillar) => {
         setActiveTopic(pillar.title);
-        // Prepare initial AI message combining tip + a random challenge (if exists)
-        const challengeArr = challenges[pillar.title] || [];
-        const challenge = challengeArr.length ? challengeArr[Math.floor(Math.random() * challengeArr.length)] : "";
-        const intro = `You are now in ${pillar.title} mode. Topic: ${pillar.title}. Tip: ${pillar.tip}${challenge ? ` Suggested challenge: ${challenge}.` : ""}`;
 
-        // Reset chat and add bot intro
+        const challengeArr = challenges[pillar.title] || [];
+        const challenge =
+            challengeArr.length
+                ? challengeArr[Math.floor(Math.random() * challengeArr.length)]
+                : "";
+
+        const intro = `You are now in ${pillar.title} mode.
+Tip: ${pillar.tip}
+${challenge ? `Suggested challenge: ${challenge}` : ""}`;
+
         setTopicChat([{ from: "bot", text: intro }]);
+
+        try {
+            const suggestions = await generateGoalSuggestions(pillar.title, assistantModeId);
+
+            if (suggestions) {
+                setTopicChat((prev) => [
+                    ...prev,
+                    {
+                        from: "bot",
+                        text: `Here are some goals you can start today:\n\n${suggestions}`
+                    }
+                ]);
+            }
+        } catch (err) {
+            console.error("Goal suggestion error:", err);
+        }
+
         setTopicInput("");
     };
 
@@ -202,60 +246,62 @@ const GoalsPage = ({ floatingInputBar }) => {
         setTopicLoading(false);
     };
 
-    // Send message within topic mode. This function enforces scope in system prompt.
-    // Send message within topic mode. This function enforces scope in system prompt.
     const sendTopicMessage = async () => {
-        const trimmed = topicInput.trim();
-        if (!trimmed) return;
 
-        // append user message locally
-        setTopicChat((prev) => [...prev, { from: "user", text: trimmed }]);
+        const trimmed = topicInput.trim();
+        if (!trimmed || !activeTopic || topicLoading) return;
+
+        const nextTopicChat = [...topicChat, { from: "user", text: trimmed }];
+        setTopicChat(nextTopicChat);
         setTopicInput("");
         setTopicLoading(true);
 
-        // Build strict system prompt that enforces scope
-        const systemPrompt = `
-You are an assistant limited to discussing the topic "${activeTopic}".
-You must only reply with help, advice and examples directly related to "${activeTopic}".
-If the user ask something to do which is related to users help for better understandind of the "${activeTopic}"do that. 
-Keep responses focused, actionable, empathetic and no longer than 6 sentences.
-Include one short actionable step the user can try right now.
-    `.trim();
-
-        // Add context (tip + challenge) if available
-        const pillar = pillars.find(p => p.title === activeTopic);
-        const extraContext = pillar ? `Context: ${pillar.tip}` : "";
-
-        // ✅ Build proper messages array
-        const messagesToSend = [
-            { role: "system", content: systemPrompt + "\n" + extraContext },
-            ...topicChat.map(m => ({
-                role: m.from === "bot" ? "assistant" : "user",
-                content: m.text
-            })),
-            { role: "user", content: trimmed }
-        ];
-
         try {
-            const callA4F = async ({ model = "provider-3/gpt-4o-mini", messages }) => {
-                try {
-                    const response = await a4fClient.chat.completions.create({ model, messages });
-                    return response.choices?.[0]?.message?.content?.trim() || null;
-                } catch (err) {
-                    console.error("A4F API Error:", err);
-                    return null;
+
+            const recentTopicMessages = nextTopicChat
+                .filter((message) => typeof message.text === "string" && message.text.trim())
+                .slice(-10)
+                .map((message) => ({
+                    role: message.from === "user" ? "user" : "model",
+                    content: message.text.trim(),
+                }));
+
+            const messagesToSend = buildModeAwareMessages({
+                modeId: assistantModeId,
+                messages: recentTopicMessages,
+                taskInstruction: `This conversation is specifically about ${activeTopic} goals. Give concise, practical guidance that helps the user choose or complete realistic next steps.`,
+            });
+
+            const response = await fetch(
+                AI_API_URL,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(messagesToSend),
                 }
-            };
+            );
 
-            const aiReply = await callA4F({ model: "provider-3/gpt-4o-mini", messages: messagesToSend });
-            const reply = aiReply || "Sorry — I couldn't generate a reply.";
+            if (!response.ok) {
+                throw new Error(`Goal conversation failed with ${response.status}`);
+            }
 
-            setTopicChat((prev) => [...prev, { from: "bot", text: reply }]);
-        } catch (err) {
-            console.error("Topic AI error:", err);
+            const data = await response.json();
+
+            const reply = data.content || "Sorry — I couldn't generate a reply.";
+
             setTopicChat((prev) => [
                 ...prev,
-                { from: "bot", text: "Sorry, I couldn't respond right now." },
+                { from: "bot", text: reply }
+            ]);
+
+        } catch (err) {
+            console.error("Topic AI error:", err);
+
+            setTopicChat((prev) => [
+                ...prev,
+                { from: "bot", text: "Failed to respond." }
             ]);
         } finally {
             setTopicLoading(false);
@@ -275,25 +321,16 @@ Include one short actionable step the user can try right now.
             {/* Center: Logo */}
             <div className="brand-logo flex items-center gap-2">
                 <img src={LOGO2} alt="Logo" className="logo-icon h-8 w-auto" />
-                <h2 className="brand-title text-white font-bold text-lg">MindMate</h2>
+                <h2 className="brand-title text-white font-bold text-lg">Vital Sense</h2>
             </div>
 
             {/* HEADER */}
             <header className="section header-section">
                 <h2 className="page-title">
-                    <Flame className="inline mr-2 h-6 w-6" style={{ fill: "url(#flame-gradient)" }} />
-                    <svg width="6" height="6">
-                        <defs>
-                            <linearGradient id="flame-gradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#FFD700" />
-                                <stop offset="50%" stopColor="#FF8C00" />
-                                <stop offset="100%" stopColor="#FF0000" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
+                    <Flame size={22} strokeWidth={1.7} aria-hidden="true" />
                     Goals
                 </h2>
-                <motion.p
+                <Motion.p
                     key={dailyQuote}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -301,14 +338,14 @@ Include one short actionable step the user can try right now.
                     className="daily-quote"
                 >
                     {dailyQuote}
-                </motion.p>
+                </Motion.p>
             </header>
 
             {/* PILLARS */}
             <section className="section pillars-section">
                 <div className="pillar-grid">
                     {pillars.map((p) => (
-                        <motion.div
+                        <Motion.div
                             whileHover={{ scale: 1.05 }}
                             key={p.title}
                             className="pillar-card"
@@ -329,7 +366,7 @@ Include one short actionable step the user can try right now.
                                     {challenges[p.title][Math.floor(Math.random() * challenges[p.title].length)]}
                                 </p>
                             )}
-                        </motion.div>
+                        </Motion.div>
                     ))}
                 </div>
             </section>
@@ -373,7 +410,7 @@ Include one short actionable step the user can try right now.
                                 width="20"
                                 height="20"
                                 fill="white"
-                                xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                                xmlns="http://www.w3.org/2000/svg"
                             >
                                 <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
                             </svg>
@@ -388,7 +425,7 @@ Include one short actionable step the user can try right now.
                     <h2 className="text-2xl font-bold mb-6">Your Goals</h2>
                     <div className="pillar-grid">
                         {goals.map((goal) => (
-                            <motion.div key={goal.id} whileHover={{ scale: 1.05 }} className="pillar-card">
+                            <Motion.div key={goal.id} whileHover={{ scale: 1.05 }} className="pillar-card">
                                 <div className="pillar-icon">
                                     <Flame className="h-6 w-6 text-transparent bg-gradient-to-b from-yellow-400 via-orange-500 to-red-600 bg-clip-text" />
                                 </div>
@@ -400,7 +437,7 @@ Include one short actionable step the user can try right now.
                                 >
                                     ✖ Remove
                                 </button>
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </div>
                 </section>
@@ -410,7 +447,7 @@ Include one short actionable step the user can try right now.
             <section className="section list-section">
                 <div className="goals-list">
                     {goals.map((goal) => (
-                        <motion.div key={goal.id} whileHover={{ scale: 1.02 }} className="goal-card">
+                        <Motion.div key={goal.id} whileHover={{ scale: 1.02 }} className="goal-card">
                             <div className="goal-info">
                                 <h3>{goal.title}</h3>
                                 <p>{goal.category} • {goal.frequency}</p>
@@ -427,7 +464,7 @@ Include one short actionable step the user can try right now.
                                         const updatedGoals = goals.map(g => g.id === goal.id ? updatedGoal : g);
                                         setGoals(updatedGoals);
                                         try {
-                                            const user = auth.currentUser;
+                                            const user = auth?.currentUser;
                                             const goalRef = doc(db, "users", user.uid, "goals", goal.id);
                                             await updateDoc(goalRef, {
                                                 progress: updatedGoal.progress,
@@ -441,7 +478,7 @@ Include one short actionable step the user can try right now.
                                     className="icon check"
                                 />
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     ))}
 
                 </div>
@@ -449,7 +486,7 @@ Include one short actionable step the user can try right now.
 
             {/* CUSTOM GOAL MODAL */}
             {showWizard && (
-                <div className="modal-overlay">
+                <div className="goals-modal-overlay">
                     <div className="goal-modal">
                         <h2>Create a Custom Goal</h2>
                         <input
@@ -466,16 +503,16 @@ Include one short actionable step the user can try right now.
                             <option>Weekly</option>
                             <option>Monthly</option>
                         </select>
-                        <div className="modal-actions">
+                        <div className="goals-modal-actions">
                             <button
                                 onClick={() => setShowWizard(false)}
-                                className="cancel-btn"
+                                className="goal-modal__cancel"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={addGoal}
-                                className="save-btn"
+                                className="goal-modal__save"
                             >
                                 Save Goal
                             </button>

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import "../styles/LoginScreen.css";
 import googleLogo from "../assets/google-logo.svg";
 import {
@@ -15,14 +15,14 @@ const LOOK_AWAY_X = -6; // LEFT
 const LOOK_AWAY_Y = 0;  // CENTER
 
 
-const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
+const LoginScreen = ({ onGoogleLogin, onGuestLogin, googleSubmitting = false, authError = "" }) => {
+  const [authMode, setAuthMode] = useState("login");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+
   useEffect(() => {
     const chars = gsap.utils.toArray(".char");
     const emailInput = document.getElementById("emailInput");
     const passwordInput = document.getElementById("passwordInput");
-    const logo = document.querySelector(".floating-logo");
-
-
     /* ================= ENTRANCE ================= */
     gsap.from(chars, {
       scaleY: 0,
@@ -42,12 +42,13 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
     let mx = innerWidth / 2;
     let my = innerHeight / 2;
 
-    window.addEventListener("mousemove", e => {
+    const handleMouseMove = (e) => {
       mx = e.clientX;
       my = e.clientY;
-    });
+    };
+    window.addEventListener("mousemove", handleMouseMove);
 
-    gsap.ticker.add(() => {
+    const followCursor = () => {
       chars.forEach(char => {
         char.querySelectorAll(".pupil").forEach(p => {
 
@@ -77,7 +78,8 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
           });
         });
       });
-    });
+    };
+    gsap.ticker.add(followCursor);
 
 
 
@@ -135,36 +137,37 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
 
     /* ================= EMAIL TYPING ================= */
     let lastType = Date.now();
-    emailInput?.addEventListener("input", () => {
+    const handleEmailInput = () => {
       const now = Date.now();
       const speed = Math.max(0.05, Math.min(0.15, (now - lastType) / 300));
       lastType = now;
       chars.forEach(c => c.talk(speed));
-    });
+    };
+    emailInput?.addEventListener("input", handleEmailInput);
 
     /* ================= PASSWORD REACTIONS ================= */
-    passwordInput?.addEventListener("focus", () => {
+    const handlePasswordFocus = () => {
       isPasswordFocused = true;
       chars.forEach(c => c.nervous());
-    });
+    };
 
-    passwordInput?.addEventListener("blur", () => {
+    const handlePasswordBlur = () => {
       isPasswordFocused = false;
       chars.forEach(c => c.smile());
-    });
+    };
+
+    passwordInput?.addEventListener("focus", handlePasswordFocus);
+    passwordInput?.addEventListener("blur", handlePasswordBlur);
 
 
 
-    passwordInput?.addEventListener("input", () => {
+    const handlePasswordInput = () => {
       const now = Date.now();
       const speed = Math.max(0.05, Math.min(0.15, (now - lastType) / 250));
       lastType = now;
       gsap.utils.random(chars).talk(speed);
-    });
-
-    passwordInput?.addEventListener("blur", () => {
-      chars.forEach(c => c.smile());
-    });
+    };
+    passwordInput?.addEventListener("input", handlePasswordInput);
 
     /* ================= WANDER (ONE AT A TIME) ================= */
     const wanderOnce = char => {
@@ -184,12 +187,23 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
         });
     };
 
-    gsap.timeline({ repeat: -1 }).to({}, {
+    const wanderTimeline = gsap.timeline({ repeat: -1 }).to({}, {
       duration: gsap.utils.random(6, 9),
       onComplete: () => wanderOnce(gsap.utils.random(chars))
     });
 
-
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      emailInput?.removeEventListener("input", handleEmailInput);
+      passwordInput?.removeEventListener("focus", handlePasswordFocus);
+      passwordInput?.removeEventListener("blur", handlePasswordBlur);
+      passwordInput?.removeEventListener("input", handlePasswordInput);
+      gsap.ticker.remove(followCursor);
+      wanderTimeline.kill();
+      gsap.killTweensOf(chars);
+      chars.forEach((char) => gsap.killTweensOf(char.querySelectorAll("*")));
+      isPasswordFocused = false;
+    };
   }, []);
 
   function Character({ color, w, h }) {
@@ -229,7 +243,7 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
     );
   }
 
-  const handleEmailLogin = async () => {
+  const handleEmailAuth = async () => {
     const email = document.getElementById("emailInput")?.value;
     const password = document.getElementById("passwordInput")?.value;
 
@@ -238,18 +252,17 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
       return;
     }
 
+    setAuthSubmitting(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      if (err.code === "auth/user-not-found") {
-        try {
-          await createUserWithEmailAndPassword(auth, email, password);
-        } catch (signupErr) {
-          alert(signupErr.message);
-        }
+      if (authMode === "signup") {
+        await createUserWithEmailAndPassword(auth, email, password);
       } else {
-        alert(err.message);
+        await signInWithEmailAndPassword(auth, email, password);
       }
+    } catch (err) {
+      alert(err.message || `${authMode === "signup" ? "Sign up" : "Login"} failed. Please try again.`);
+    } finally {
+      setAuthSubmitting(false);
     }
   };
 
@@ -272,13 +285,22 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
 
       <div className="login-box">
         <h1 className="title">
-          Welcome to <span className="highlight">MindMate</span>
+          Welcome to <span className="highlight">Vital Sense</span>
         </h1>
         <p className="subtitle">Your emotional wellness & career assistant</p>
 
-        <button className="social-btn google" onClick={onGoogleLogin}>
-          <img src={googleLogo} alt="" className="icon" /> Continue with Google
+        <button
+          type="button"
+          className="social-btn google"
+          onClick={onGoogleLogin}
+          disabled={googleSubmitting}
+          aria-busy={googleSubmitting}
+        >
+          <img src={googleLogo} alt="" className="icon" />
+          {googleSubmitting ? "Redirecting securely…" : "Continue with Google"}
         </button>
+
+        {authError && <p className="login-auth-error" role="alert">{authError}</p>}
 
         <div className="divider"><span>or</span></div>
 
@@ -294,8 +316,8 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
         </div>
 
         <div className="input-group">
-          <button className="login-btn" onClick={handleEmailLogin}>
-            Login with Email
+          <button className="login-btn" onClick={handleEmailAuth} disabled={authSubmitting}>
+            {authSubmitting ? "Please wait..." : authMode === "signup" ? "Create Account" : "Login with Email"}
           </button>
         </div>
 
@@ -321,7 +343,16 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin }) => {
         </a>
 
         <button className="guest-btn" onClick={onGuestLogin}>Try it first!</button>
-        <a href="#" className="signup-text">Don't have an account? Sign Up</a>
+        <a
+          href="#"
+          className="signup-text"
+          onClick={(event) => {
+            event.preventDefault();
+            setAuthMode((mode) => mode === "login" ? "signup" : "login");
+          }}
+        >
+          {authMode === "login" ? "Don't have an account? Sign Up" : "Already have an account? Log In"}
+        </a>
       </div>
     </div>
   );

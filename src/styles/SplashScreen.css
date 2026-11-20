@@ -1,136 +1,167 @@
-.splash-screen-full {
+.splash-screen {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, #090909, #1e1e1e);
+  z-index: 9999;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  animation: zoomFadeIn 2s ease-in-out forwards;
-  z-index: 9999;
+  color: var(--mm-text);
+  color-scheme: dark;
+  background: #000;
+  animation: splashScreenIn 700ms ease-out both;
 }
 
-/* Glowing animated title */
-.mindmate-title {
-  font-size: 4rem;
-  font-weight: 900;
+.splash-screen::before {
+  content: "";
+  width: min(420px, calc(100vw - 34px));
+  height: 352px;
+  position: absolute;
+  z-index: -1;
+  border: 1px solid var(--mm-glass-border);
+  border-radius: calc(var(--mm-radius-panel) + 12px);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.02) 54%),
+    var(--mm-glass);
+  box-shadow:
+    inset 0 1px 0 var(--mm-glass-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.025),
+    var(--mm-glass-shadow);
+  backdrop-filter: blur(var(--mm-glass-blur)) saturate(145%);
+  -webkit-backdrop-filter: blur(var(--mm-glass-blur)) saturate(145%);
+}
+
+.splash-screen::after {
+  content: none;
+  width: min(360px, 76vw);
+  aspect-ratio: 1;
+  position: absolute;
+  z-index: -2;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--mm-mode-rgb), 0.14), transparent 68%);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+.splash-screen .splash-logo {
+  width: 126px;
+  height: 126px;
+  margin-bottom: 23px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--mm-radius-panel);
+  outline: 5px solid rgba(255, 255, 255, 0.035);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 18px 42px rgba(0, 0, 0, 0.36),
+    0 0 32px rgba(var(--mm-mode-rgb), 0.16);
+  animation: splashLogoFloat 3s ease-in-out infinite;
+}
+
+.splash-screen .animated-text {
+  margin: 0;
   color: transparent;
-  background: linear-gradient(90deg, #00f0ff, #7f5af0);
+  font-family: inherit;
+  font-size: clamp(36px, 5vw, 42px);
+  font-weight: 740;
+  letter-spacing: -0.045em;
+  background: linear-gradient(
+    105deg,
+    var(--mm-text) 12%,
+    rgba(var(--mm-mode-rgb), 0.96) 46%,
+    #ffffff 66%,
+    var(--mm-text) 88%
+  );
+  background-size: 180% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 60px #7f5af0aa;
-  animation: pulseGlow 3s infinite ease-in-out, floatY 3.5s ease-in-out infinite;
+  animation: splashTextSheen 2.2s ease-in-out infinite alternate;
 }
 
-/* Subtitle */
-.splash-tagline {
-  margin-top: 12px;
-  font-size: 1.2rem;
-  color: #e2e2e2;
+.splash-screen .splash-tagline {
+  max-width: 320px;
+  margin: 12px 20px 0;
+  color: var(--mm-text-muted);
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.5;
   opacity: 0;
-  animation: fadeIn 2s ease 1.5s forwards;
+  animation: splashTaglineIn 650ms ease 500ms forwards;
 }
 
-/* Floating particles texture */
-.particles-layer::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("https://www.transparenttextures.com/patterns/stardust.png");
-  opacity: 0.06;
-  animation: scrollStars 30s linear infinite;
-  z-index: 0;
-}
-
-/* Animations */
-@keyframes pulseGlow {
-  0%, 100% {
-    text-shadow: 0 0 20px #00f0ff66, 0 0 35px #7f5af0aa;
+@media (max-width: 480px) {
+  .splash-screen::before {
+    height: 326px;
   }
-  50% {
-    text-shadow: 0 0 30px #00f0ffcc, 0 0 60px #7f5af0;
+
+  .splash-screen .splash-logo {
+    width: 110px;
+    height: 110px;
+  }
+
+  .splash-screen .animated-text {
+    font-size: 34px;
+  }
+
+  .splash-screen .splash-tagline {
+    max-width: 270px;
+    font-size: 14px;
   }
 }
 
-@keyframes floatY {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
-}
-
-@keyframes fadeIn {
-  to { opacity: 1; }
-}
-
-@keyframes zoomFadeIn {
-  0% {
-    transform: scale(1.2);
-    opacity: 0;
-    filter: blur(20px);
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen,
+  .splash-screen .splash-logo,
+  .splash-screen .animated-text,
+  .splash-screen .splash-tagline {
+    animation: none;
   }
-  100% {
-    transform: scale(1);
+
+  .splash-screen .splash-tagline {
     opacity: 1;
-    filter: blur(0);
   }
 }
 
-@keyframes scrollStars {
-  0% { background-position: 0 0; }
-  100% { background-position: 100px 200px; }
-}
-
-
-.splash-screen {
-  height: 100vh;
-  width: 100vw;
-  background: linear-gradient(135deg, #0f0f1b, #131a28);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 1s ease-in;
-  overflow: hidden;
-}
-
-.splash-logo {
-  width: 130px;
-  height: 130px;
-  border-radius: 20px;
-  margin-bottom: 20px;
-  animation: logoFloat 3s ease-in-out infinite;
-  box-shadow: 0 0 25px rgba(0, 255, 200, 0.25); /* reduced glow */
-}
-
-.animated-text {
-  font-size: 40px;
-  font-weight: 700;
-  background: linear-gradient(90deg, #1dd1a1, #5f27cd, #00d2d3);
-  background-clip: border-box;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: glowText 2s ease-in-out infinite alternate;
-  font-family: 'Segoe UI', sans-serif;
-  letter-spacing: 1.5px;
-}
-
-@keyframes glowText {
+@keyframes splashScreenIn {
   from {
-    text-shadow: 0 0 10px #00f0ff, 0 0 20px #00f0ff;
+    opacity: 0;
+    transform: scale(0.985);
   }
   to {
-    text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc;
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-@keyframes logoFloat {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-  100% { transform: translateY(0); }
+@keyframes splashLogoFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
+@keyframes splashTextSheen {
+  from {
+    background-position: 0% 50%;
+    text-shadow: 0 0 18px rgba(var(--mm-mode-rgb), 0.12);
+  }
+  to {
+    background-position: 100% 50%;
+    text-shadow: 0 0 28px rgba(var(--mm-mode-rgb), 0.23);
+  }
+}
+
+@keyframes splashTaglineIn {
+  to {
+    opacity: 1;
+  }
 }
