@@ -37,7 +37,7 @@ open api docs:
 ## 🏗 Tech Stack
 
 - Frontend: React, Framer Motion, Lucide Icons, CSS / Glassmorphism UI
-- Backend: FastAPI, Python 3.11, NVIDIA NIM (Nemotron 3 Nano 30B A3B), NVIDIA Magpie TTS
+- Backend: FastAPI, Python 3.11, NVIDIA NIM (Nemotron 3 Nano Omni 30B A3B), NVIDIA Magpie TTS
 - Cloud & Storage: Firebase Authentication, Firebase Firestore
 - Deployment: Vercel (frontend), Render (backend)
 
