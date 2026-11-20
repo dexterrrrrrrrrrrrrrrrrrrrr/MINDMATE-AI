@@ -16,12 +16,11 @@ import {
     Star,
 } from "lucide-react";
 import "../styles/GoalsPage.css";
-import { collection, addDoc, getDocs, doc, updateDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { collection, addDoc, getDocs, doc, updateDoc, onSnapshot } from "../accountData";
+import { db } from "../accountData";
 import LOGO2 from "../assets/LOGO2.svg";
 import { AI_API_URL } from "../config";
-import { deleteDoc } from "firebase/firestore";
+import { deleteDoc } from "../accountData";
 import { buildModeAwareMessages } from "../utils/assistantRequest";
 
 
@@ -100,7 +99,7 @@ const pillars = [
     { title: "Create Custom", icon: <Plus size={20} />, tip: "A goal without a plan is just a wish. Craft it, chase it, and celebrate every step." },
 ];
 
-const GoalsPage = ({ assistantModeId = "therapy" }) => {
+const GoalsPage = ({ assistantModeId = "therapy", user }) => {
     const [goals, setGoals] = useState([]);
     const [showWizard, setShowWizard] = useState(false);
     const [newGoal, setNewGoal] = useState({
@@ -111,14 +110,13 @@ const GoalsPage = ({ assistantModeId = "therapy" }) => {
     const [dailyQuote, setDailyQuote] = useState("");
 
     const removeGoal = async (goalId) => {
-        const user = auth?.currentUser;
         if (!user) return;
 
         try {
             // update UI immediately
             setGoals((prev) => prev.filter((g) => g.id !== goalId));
 
-            // then delete from Firestore
+            // then delete from MongoDB
             await deleteDoc(doc(db, "users", user.uid, "goals", goalId));
         } catch (err) {
             console.error("Failed to delete goal:", err);
@@ -150,14 +148,13 @@ const GoalsPage = ({ assistantModeId = "therapy" }) => {
         topicMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [topicChat]);
 
-    // Firestore: add goal
+    // MongoDB: add goal
     const addGoal = async () => {
         if (!newGoal.title) {
             alert("Please enter a goal title!");
             return;
         }
 
-        const user = auth?.currentUser;
         if (!user) {
             alert("Saving goals is unavailable in guest mode.");
             return;
@@ -186,22 +183,16 @@ const GoalsPage = ({ assistantModeId = "therapy" }) => {
         }
     };
 
-    // Load user goals
+    // Refresh private goals after local writes and when this window regains focus.
     useEffect(() => {
-        if (!auth) return undefined;
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                const userGoalsRef = collection(db, "users", user.uid, "goals");
-                const snapshot = await getDocs(userGoalsRef);
-                const userGoals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setGoals(userGoals);
-
-            } else {
-                setGoals([]);
-            }
-        });
-        return () => unsubscribe();
-    }, []);
+        if (!user) {
+            setGoals([]);
+            return undefined;
+        }
+        return onSnapshot(collection(db, "users", user.uid, "goals"), (snapshot) => {
+            setGoals(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+        }, () => setGoals([]));
+    }, [user]);
 
     // Called when pillar clicked (non-custom)
     const openTopicMode = async (pillar) => {
@@ -464,8 +455,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                                         const updatedGoals = goals.map(g => g.id === goal.id ? updatedGoal : g);
                                         setGoals(updatedGoals);
                                         try {
-                                            const user = auth?.currentUser;
-                                            const goalRef = doc(db, "users", user.uid, "goals", goal.id);
+                                                                                const goalRef = doc(db, "users", user.uid, "goals", goal.id);
                                             await updateDoc(goalRef, {
                                                 progress: updatedGoal.progress,
                                                 streak: updatedGoal.streak,

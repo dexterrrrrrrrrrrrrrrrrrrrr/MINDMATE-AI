@@ -31,6 +31,7 @@ export default {
 
 export default defineConfig({
   plugins: [react(), sitesStaticWorker()],
+  server: { proxy: { '/api/v1/account': { target: 'http://127.0.0.1:8000', changeOrigin: true } } },
   define: {
     'crypto.hash': 'undefined' // disables broken usage if any package tries it
   },
@@ -40,7 +41,6 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('@react-three') || id.includes('/three/')) return 'three-vendor';
-          if (id.includes('/firebase/') || id.includes('@firebase')) return 'firebase-vendor';
           if (id.includes('/gsap/')) return 'gsap-vendor';
           if (id.includes('/framer-motion/')) return 'motion-vendor';
           if (id.includes('/howler/')) return 'audio-vendor';

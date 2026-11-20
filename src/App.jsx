@@ -1,14 +1,6 @@
 import React, { lazy, Suspense, useState, useEffect, useRef, useMemo, startTransition } from "react";
 import { FaArrowDown } from "react-icons/fa";
-import {
-  auth,
-  firebaseEnabled,
-  authRedirectDomain,
-  prepareAuthSession,
-  provider,
-  signInWithRedirect,
-  signOut,
-} from "./firebase";
+import { auth, onAuthStateChanged, signOut } from "./account";
 import {
   Copy,
   ThumbsUp,
@@ -23,7 +15,7 @@ import SearchChatsModal from "./components/SearchChatsModal";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import { useLocation } from "react-router-dom";
 import { Howl } from "howler";
-import { updateDoc } from "firebase/firestore";
+import { updateDoc } from "./accountData";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import SplashScreen from "./components/SplashScreen";
@@ -41,9 +33,8 @@ import {
   serverTimestamp,
   deleteDoc,
   doc,
-} from "firebase/firestore";
-import { db } from "./firebase"; // your Firebase config file
-import { getRedirectResult, onAuthStateChanged } from "firebase/auth";
+} from "./accountData";
+import { db } from "./accountData";
 import WelcomeScreen from "./components/WelcomeScreen";
 
 import VoicePulseLine from "./components/VoicePulseLine";
@@ -71,29 +62,11 @@ const VoiceCloud = lazy(() => import("./components/VoiceCloud"));
 const GoalsPage = lazy(() => import("./components/GoalsPage"));
 const LoginScreen = lazy(() => import("./components/LoginScreen"));
 
-const AUTH_REDIRECT_PENDING_KEY = "mindmate.authRedirectPending";
-const AUTH_RETURN_PATH_KEY = "mindmate.authReturnPath";
-
-const getSafeReturnPath = (path) => (
-  typeof path === "string" && path.startsWith("/") && !path.startsWith("//") && path !== "/login"
-    ? path
-    : "/"
-);
-
 const formatDictationTime = (seconds) => {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = String(seconds % 60).padStart(2, "0");
   return `${minutes}:${remainingSeconds}`;
 };
-
-const mapFirebaseUser = (firebaseUser) => firebaseUser
-  ? {
-      displayName: firebaseUser.displayName || "Anonymous",
-      email: firebaseUser.email || "",
-      photoURL: firebaseUser.photoURL || null,
-      uid: firebaseUser.uid,
-    }
-  : null;
 
 const omitMarkdownMetadata = ({ node, inline, ...props }) => {
   void node;
@@ -144,13 +117,10 @@ function App() {
   // User & UI state
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
-  const [authResolved, setAuthResolved] = useState(!firebaseEnabled);
-  const [authSubmitting, setAuthSubmitting] = useState(
-    () => firebaseEnabled && sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === "true"
-  );
+  const [authResolved, setAuthResolved] = useState(false);
   const [authError, setAuthError] = useState("");
   const [isGuest, setIsGuest] = useState(
-    () => !firebaseEnabled || localStorage.getItem("isGuest") === "true"
+    () => localStorage.getItem("isGuest") === "true"
   );
   const [input, setInput] = useState("");
   const [assistantModeId, setAssistantModeId] = useState(
@@ -178,7 +148,7 @@ function App() {
     () => localStorage.getItem("mindmate.autoSpeak") === "true"
   );
   const [showSplash, setShowSplash] = useState(
-    () => sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) !== "true"
+    () => true
   );
   const [sidebarOpen, setSidebarOpen] = useState(
     () => !window.matchMedia("(max-width: 768px)").matches
@@ -504,7 +474,6 @@ function App() {
 
   useEffect(() => {
     if (
-      firebaseEnabled &&
       !user &&
       isGuest &&
       guestMessageCount >= 5 &&
@@ -597,71 +566,16 @@ function App() {
     dictationStreamRef.current = null;
   }, []);
 
-  useEffect(() => {
-    if (!firebaseEnabled) return undefined;
-    let active = true;
-    let authStateReady = false;
-    let redirectReady = false;
-    let redirectUser = null;
-    let redirectError = null;
+  useEffect(() => onAuthStateChanged(auth, (account) => {
+    setUser(account);
+    setAuthResolved(true);
+    if (account) {
+      setIsGuest(false);
+      setAuthError("");
+    }
+  }), []);
 
-    const finishAuthBootstrap = () => {
-      if (!active || !authStateReady || !redirectReady) return;
-
-      const firebaseUser = redirectUser || auth.currentUser;
-      setUser(mapFirebaseUser(firebaseUser));
-      setAuthResolved(true);
-      setAuthSubmitting(false);
-
-      const redirectPending = sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === "true";
-      const returnPath = getSafeReturnPath(sessionStorage.getItem(AUTH_RETURN_PATH_KEY));
-
-      if (redirectPending) {
-        sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-        sessionStorage.removeItem(AUTH_RETURN_PATH_KEY);
-
-        if (firebaseUser) {
-          setAuthError("");
-          navigate(returnPath, { replace: true });
-        } else {
-          const message = redirectError?.code === "auth/unauthorized-domain"
-            ? `Google login is not authorized for ${authRedirectDomain}.`
-            : "Google login could not be completed. Please try again.";
-          setAuthError(message);
-          navigate("/login", { replace: true });
-        }
-      }
-    };
-
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (!active) return;
-      setUser(mapFirebaseUser(firebaseUser));
-      if (firebaseUser) setAuthError("");
-      authStateReady = true;
-      finishAuthBootstrap();
-    });
-
-    getRedirectResult(auth)
-      .then((result) => {
-        redirectUser = result?.user || null;
-      })
-      .catch((error) => {
-        redirectError = error;
-        console.error("Google redirect sign-in failed:", error);
-      })
-      .finally(() => {
-        redirectReady = true;
-        finishAuthBootstrap();
-      });
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [navigate]);
-
-
-  // Load user's saved chats from Firestore when logged in
+  // Load user's saved chats from MongoDB when logged in
   useEffect(() => {
     if (!user) {
       setChatTitles([]);
@@ -681,11 +595,11 @@ function App() {
   // Load selected chat messages or show welcome message if none selected
 
 
-  // Auto-save chat to Firestore after 1s delay on chatLog changes
+  // Auto-save chat to MongoDB after 1s delay on chatLog changes
 
 
   useEffect(() => {
-    if (!authResolved || authSubmitting) return;
+    if (!authResolved) return;
 
     if (user) {
       if (location.pathname === "/login") {
@@ -697,7 +611,7 @@ function App() {
         navigate("/login", { replace: true, state: { from: location.pathname } });
       }
     }
-  }, [authResolved, authSubmitting, user, isGuest, location.pathname, location.state, navigate]);
+  }, [authResolved, user, isGuest, location.pathname, location.state, navigate]);
 
 
   useEffect(() => {
@@ -1236,49 +1150,9 @@ function App() {
   };
 
 
-  // Login/logout handlers
-  // Login button
-  const handleGoogleLogin = async () => {
-    if (!firebaseEnabled) return;
-    if (authSubmitting) return;
-
-    const previousLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    const returnPath = getSafeReturnPath(location.state?.from);
-
-    try {
-      setAuthSubmitting(true);
-      setAuthError("");
-      setIsGuest(false);
-      localStorage.removeItem("isGuest");
-
-      sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, "true");
-      sessionStorage.setItem(AUTH_RETURN_PATH_KEY, returnPath);
-
-      await prepareAuthSession();
-
-      // Firebase returns to the URL where redirect sign-in began. Starting from
-      // the SPA root also makes the callback resilient on static hosts.
-      window.history.replaceState(window.history.state, "", "/");
-      await signInWithRedirect(auth, provider);
-    } catch (err) {
-      sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-      sessionStorage.removeItem(AUTH_RETURN_PATH_KEY);
-      window.history.replaceState(window.history.state, "", previousLocation);
-      setAuthSubmitting(false);
-      console.error("Sign-in error:", err);
-      setAuthError(
-        err?.code === "auth/unauthorized-domain"
-          ? `Google login is not authorized for ${authRedirectDomain}.`
-          : err.message || "Google sign-in failed. Please try again."
-      );
-    }
-  };
-
+  // Account session actions
   const handleGuestLogin = () => {
-    sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
-    sessionStorage.removeItem(AUTH_RETURN_PATH_KEY);
     setAuthError("");
-    setAuthSubmitting(false);
     setIsGuest(true);
     localStorage.setItem("isGuest", "true"); // ✅ persist
     navigate("/");   // redirect guest to main screen
@@ -1307,7 +1181,7 @@ function App() {
     // response cannot attempt to write back into the deleted conversation.
     if (chatId === activeChatId && (isTyping || isThinking)) handleStop();
 
-    // Saved chat: delete from Firestore and state
+    // Saved chat: delete from MongoDB and state
     try {
       await deleteDoc(doc(db, "users", user.uid, "chats", chatId));
     } catch (err) {
@@ -1455,7 +1329,7 @@ function App() {
                 onLogout={handleSignOut}
                 goToPremium={goToPremium}
                 onOpenSettings={() => setSettingsOpen(true)}
-                loginEnabled={firebaseEnabled}
+                loginEnabled={true}
                 onLoginClick={() => navigate("/login")}
                 onToggleSidebar={() => setSidebarOpen((open) => !open)}
                 modeSwitcher={(
@@ -2042,14 +1916,12 @@ function App() {
       <Route path="/premium" element={<Premium user={user} />} />
       <Route
         path="/login"
-        element={firebaseEnabled ? (
+        element={(
           <LoginScreen
-            onGoogleLogin={handleGoogleLogin}
             onGuestLogin={handleGuestLogin}
-            googleSubmitting={authSubmitting}
             authError={authError}
           />
-        ) : <Navigate to="/" replace />}
+        )}
       />
 
       <Route
@@ -2063,7 +1935,7 @@ function App() {
           />
         }
       />
-      <Route path="/goals" element={<GoalsPage assistantModeId={assistantModeId} />} />
+      <Route path="/goals" element={<GoalsPage assistantModeId={assistantModeId} user={user} />} />
       <Route path="/journals" element={<JournalChatScreen user={user} isGuest={isGuest} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

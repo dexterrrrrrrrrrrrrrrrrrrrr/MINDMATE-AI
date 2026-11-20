@@ -1,15 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { LogOut, Trash2, X } from "lucide-react";
-import {
-  deleteUser,
-  EmailAuthProvider,
-  FacebookAuthProvider,
-  GoogleAuthProvider,
-  reauthenticateWithCredential,
-  reauthenticateWithPopup,
-} from "firebase/auth";
-import { deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { deleteAccount } from "../account";
+import { doc, getDoc, setDoc } from "../accountData";
+import { auth } from "../account";
+import { db } from "../accountData";
 import "../styles/Settings.css";
 
 const sections = [
@@ -47,7 +41,6 @@ export default function SettingsModal({
   const [active, setActive] = useState("general");
   const [closing, setClosing] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -61,7 +54,6 @@ export default function SettingsModal({
   const previouslyFocusedRef = useRef(null);
 
   const resetAccountDialogs = useCallback(() => {
-    setShowConfirmModal(false);
     setShowPasswordModal(false);
     setShowSuccessModal(false);
     setErrorMessage("");
@@ -110,7 +102,7 @@ export default function SettingsModal({
         else if (showPasswordModal) {
           setShowPasswordModal(false);
           setPassword("");
-        } else if (showConfirmModal) setShowConfirmModal(false);
+        }
         else handleClose();
         return;
       }
@@ -133,16 +125,16 @@ export default function SettingsModal({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [deletePending, errorMessage, handleClose, isOpen, showConfirmModal, showPasswordModal, showSuccessModal]);
+  }, [deletePending, errorMessage, handleClose, isOpen, showPasswordModal, showSuccessModal]);
 
   useEffect(() => {
-    if (!showConfirmModal && !showPasswordModal && !showSuccessModal && !errorMessage) return undefined;
+    if (!showPasswordModal && !showSuccessModal && !errorMessage) return undefined;
     const focusFrame = requestAnimationFrame(() => {
       const dialog = modalRef.current?.querySelector(".settings-confirm-dialog");
       dialog?.querySelector(focusableSelector)?.focus();
     });
     return () => cancelAnimationFrame(focusFrame);
-  }, [errorMessage, showConfirmModal, showPasswordModal, showSuccessModal]);
+  }, [errorMessage, showPasswordModal, showSuccessModal]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -197,52 +189,7 @@ export default function SettingsModal({
       return;
     }
 
-    const providerId = currentUser.providerData[0]?.providerId;
-    if (providerId === "password") {
-      setShowPasswordModal(true);
-      return;
-    }
-
-    if (providerId === "google.com" || providerId === "facebook.com") {
-      setShowConfirmModal(true);
-      return;
-    }
-
-    setErrorMessage("This account provider is not supported for deletion yet.");
-  };
-
-  const finishAccountDeletion = async (currentUser) => {
-    await deleteDoc(doc(db, "users", currentUser.uid));
-    await deleteUser(currentUser);
-    setShowConfirmModal(false);
-    setShowPasswordModal(false);
-    setPassword("");
-    setShowSuccessModal(true);
-  };
-
-  const confirmDeleteOAuth = async () => {
-    const currentUser = auth?.currentUser;
-    if (!currentUser || deletePending) return;
-
-    setDeletePending(true);
-    setErrorMessage("");
-    try {
-      const providerId = currentUser.providerData[0]?.providerId;
-      if (providerId === "google.com") {
-        await reauthenticateWithPopup(currentUser, new GoogleAuthProvider());
-      } else if (providerId === "facebook.com") {
-        await reauthenticateWithPopup(currentUser, new FacebookAuthProvider());
-      } else {
-        throw new Error("Unsupported account provider.");
-      }
-      await finishAccountDeletion(currentUser);
-    } catch (error) {
-      console.error("Account deletion failed:", error);
-      setShowConfirmModal(false);
-      setErrorMessage("We couldn't delete your account. Please try again.");
-    } finally {
-      setDeletePending(false);
-    }
+    setShowPasswordModal(true);
   };
 
   const confirmDeletePassword = async () => {
@@ -252,9 +199,10 @@ export default function SettingsModal({
     setDeletePending(true);
     setErrorMessage("");
     try {
-      const credential = EmailAuthProvider.credential(currentUser.email, password);
-      await reauthenticateWithCredential(currentUser, credential);
-      await finishAccountDeletion(currentUser);
+      await deleteAccount(password);
+      setShowPasswordModal(false);
+      setPassword("");
+      setShowSuccessModal(true);
     } catch (error) {
       console.error("Account deletion failed:", error);
       setShowPasswordModal(false);
@@ -479,27 +427,7 @@ export default function SettingsModal({
           </main>
         </div>
 
-        {showConfirmModal && (
-          <div
-            className="settings-confirm-backdrop"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) dismissDialog(setShowConfirmModal);
-            }}
-          >
-            <div className="settings-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-account-title" aria-describedby="delete-account-copy">
-              <h3 id="delete-account-title">Delete your account?</h3>
-              <p id="delete-account-copy">This permanently removes your account and saved data. You’ll be asked to verify your identity first.</p>
-              <div className="settings-dialog-actions">
-                <button type="button" className="settings-dialog-cancel" onClick={() => setShowConfirmModal(false)} disabled={deletePending}>Cancel</button>
-                <button type="button" className="settings-dialog-danger" onClick={confirmDeleteOAuth} disabled={deletePending}>
-                  {deletePending ? "Verifying…" : "Continue"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showPasswordModal && (
+  {showPasswordModal && (
           <div
             className="settings-confirm-backdrop"
             onMouseDown={(event) => {

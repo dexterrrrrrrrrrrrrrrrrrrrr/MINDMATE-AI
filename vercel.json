@@ -6,6 +6,15 @@
   "trailingSlash": false,
   "headers": [
     {
+      "source": "/api/v1/account/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
@@ -28,6 +37,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/v1/account/:path*",
+      "destination": "https://mindmate-ai-api-anurag.onrender.com/api/v1/account/:path*"
+    },
     {
       "source": "/:path*",
       "destination": "/index.html"

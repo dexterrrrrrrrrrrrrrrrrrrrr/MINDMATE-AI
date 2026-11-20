@@ -21,8 +21,8 @@ import {
   query,
   serverTimestamp,
   updateDoc,
-} from "firebase/firestore";
-import { db } from "../firebase";
+} from "../accountData";
+import { db } from "../accountData";
 import "../styles/Journal.css";
 
 const GUEST_JOURNAL_KEY = "mindmate_guest_journals";

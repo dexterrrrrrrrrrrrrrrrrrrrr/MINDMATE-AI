@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "../styles/LoginScreen.css";
-import googleLogo from "../assets/google-logo.svg";
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail
-} from "firebase/auth";
-import { auth } from "../firebase";
+import { signIn, signUp } from "../account";
 
 import gsap from "gsap";
 
@@ -15,9 +9,52 @@ const LOOK_AWAY_X = -6; // LEFT
 const LOOK_AWAY_Y = 0;  // CENTER
 
 
-const LoginScreen = ({ onGoogleLogin, onGuestLogin, googleSubmitting = false, authError = "" }) => {
+  function Character({ color, w, h }) {
+    return (
+      <svg className="char" width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+        <g className="char-move">
+          <rect className="body" width={w} height={h} rx={18} fill={color} />
+
+          <g className="head" transform={`translate(${w / 2}, ${h * 0.35})`}>
+            <g transform="translate(-16,0)">
+              <g className="eye">
+                <circle cx="6" cy="6" r="6" fill="#fff" />
+                <circle className="pupil" cx="6" cy="6" r="3" fill="#000" />
+              </g>
+              <g className="eye" transform="translate(20,0)">
+                <circle cx="6" cy="6" r="6" fill="#fff" />
+                <circle className="pupil" cx="6" cy="6" r="3" fill="#000" />
+              </g>
+
+              <path
+                className="mouth"
+                data-closed="M4 26 L28 26"
+                data-open="M4 24 Q16 40 28 24"
+                data-laugh="M2 22 Q16 46 30 22"
+                data-nervous="M6 26 L26 26"
+                data-smile="M4 26 Q16 34 28 26"
+                d="M4 26 L28 26"
+                fill="none"
+                stroke="#000"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </g>
+          </g>
+        </g>
+      </svg>
+    );
+  }
+
+
+const LoginScreen = ({ onGuestLogin, authError = "" }) => {
   const [authMode, setAuthMode] = useState("login");
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     const chars = gsap.utils.toArray(".char");
@@ -206,66 +243,27 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin, googleSubmitting = false, au
     };
   }, []);
 
-  function Character({ color, w, h }) {
-    return (
-      <svg className="char" width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-        <g className="char-move">
-          <rect className="body" width={w} height={h} rx={18} fill={color} />
-
-          <g className="head" transform={`translate(${w / 2}, ${h * 0.35})`}>
-            <g transform="translate(-16,0)">
-              <g className="eye">
-                <circle cx="6" cy="6" r="6" fill="#fff" />
-                <circle className="pupil" cx="6" cy="6" r="3" fill="#000" />
-              </g>
-              <g className="eye" transform="translate(20,0)">
-                <circle cx="6" cy="6" r="6" fill="#fff" />
-                <circle className="pupil" cx="6" cy="6" r="3" fill="#000" />
-              </g>
-
-              <path
-                className="mouth"
-                data-closed="M4 26 L28 26"
-                data-open="M4 24 Q16 40 28 24"
-                data-laugh="M2 22 Q16 46 30 22"
-                data-nervous="M6 26 L26 26"
-                data-smile="M4 26 Q16 34 28 26"
-                d="M4 26 L28 26"
-                fill="none"
-                stroke="#000"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </g>
-          </g>
-        </g>
-      </svg>
-    );
-  }
-
-  const handleEmailAuth = async () => {
-    const email = document.getElementById("emailInput")?.value;
-    const password = document.getElementById("passwordInput")?.value;
-
-    if (!email || !password) {
-      alert("Please enter email and password");
+  const handleEmailAuth = async (event) => {
+    event.preventDefault();
+    if (authSubmitting) return;
+    setError("");
+    if (authMode === "signup" && password !== confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
-
     setAuthSubmitting(true);
     try {
       if (authMode === "signup") {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await signUp(displayName.trim(), email.trim(), password);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signIn(email.trim(), password);
       }
     } catch (err) {
-      alert(err.message || `${authMode === "signup" ? "Sign up" : "Login"} failed. Please try again.`);
+      setError(err.message || "Unable to sign in. Please try again.");
     } finally {
       setAuthSubmitting(false);
     }
   };
-
 
   return (
     <div className="login-screen">
@@ -289,65 +287,45 @@ const LoginScreen = ({ onGoogleLogin, onGuestLogin, googleSubmitting = false, au
         </h1>
         <p className="subtitle">Your emotional wellness & career assistant</p>
 
-        <button
-          type="button"
-          className="social-btn google"
-          onClick={onGoogleLogin}
-          disabled={googleSubmitting}
-          aria-busy={googleSubmitting}
-        >
-          <img src={googleLogo} alt="" className="icon" />
-          {googleSubmitting ? "Redirecting securely…" : "Continue with Google"}
-        </button>
-
-        {authError && <p className="login-auth-error" role="alert">{authError}</p>}
-
-        <div className="divider"><span>or</span></div>
-
-
-        <div className="input-group">
-          <input type="email" id="emailInput" required />
-          <label>Email</label>
-        </div>
-
-        <div className="input-group">
-          <input type="password" id="passwordInput" required />
-          <label>Password</label>
-        </div>
-
-        <div className="input-group">
-          <button className="login-btn" onClick={handleEmailAuth} disabled={authSubmitting}>
-            {authSubmitting ? "Please wait..." : authMode === "signup" ? "Create Account" : "Login with Email"}
+        <form onSubmit={handleEmailAuth} aria-label={authMode === "signup" ? "Create account" : "Sign in"}>
+          {(error || authError) && <p className="login-auth-error" role="alert">{error || authError}</p>}
+          {authMode === "signup" && (
+            <div className="input-group">
+              <input id="nameInput" name="name" autoComplete="name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required maxLength={80} disabled={authSubmitting} placeholder=" " />
+              <label htmlFor="nameInput">Your name</label>
+            </div>
+          )}
+          <div className="input-group">
+            <input type="email" id="emailInput" name="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required disabled={authSubmitting} placeholder=" " />
+            <label htmlFor="emailInput">Email</label>
+          </div>
+          <div className="input-group">
+            <input type="password" id="passwordInput" name="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={authMode === "signup" ? 10 : 1} maxLength={128} disabled={authSubmitting} placeholder=" " aria-describedby={authMode === "signup" ? "password-hint" : undefined} />
+            <label htmlFor="passwordInput">Password</label>
+          </div>
+          {authMode === "signup" && <>
+            <p id="password-hint" className="login-hint">Use at least 10 characters.</p>
+            <div className="input-group">
+              <input type="password" id="confirmPasswordInput" name="confirmPassword" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required maxLength={128} disabled={authSubmitting} placeholder=" " />
+              <label htmlFor="confirmPasswordInput">Confirm password</label>
+            </div>
+          </>}
+          <button type="submit" className="login-btn" disabled={authSubmitting} aria-busy={authSubmitting}>
+            {authSubmitting ? "Please wait…" : authMode === "signup" ? "Create account" : "Sign in"}
           </button>
-        </div>
+        </form>
 
-        <a
-          href="#"
-          className="forgot-link"
-          onClick={async (e) => {
-            e.preventDefault();
-            const email = document.getElementById("emailInput")?.value;
-            if (!email) {
-              alert("Enter your email first");
-              return;
-            }
-            try {
-              await sendPasswordResetEmail(auth, email);
-              alert("Password reset email sent!");
-            } catch (err) {
-              alert(err.message);
-            }
-          }}
-        >
-          Forgot password?
-        </a>
-
-        <button className="guest-btn" onClick={onGuestLogin}>Try it first!</button>
+        <button type="button" className="guest-btn" onClick={onGuestLogin} disabled={authSubmitting}>Continue as guest</button>
         <a
           href="#"
           className="signup-text"
+          aria-disabled={authSubmitting}
           onClick={(event) => {
             event.preventDefault();
+            if (authSubmitting) return;
+            setError("");
+            setPassword("");
+            setConfirmPassword("");
             setAuthMode((mode) => mode === "login" ? "signup" : "login");
           }}
         >

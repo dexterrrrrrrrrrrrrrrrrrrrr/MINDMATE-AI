@@ -429,3 +429,8 @@
     transform: translateX(0) scale(1);
   }
 }
+
+.login-screen form { width: 100%; }
+.login-screen .login-hint { color: #aaa; font-size: 0.85rem; margin: -4px 0 16px; }
+.login-screen button:disabled { cursor: wait; opacity: 0.65; }
+.login-screen .login-auth-error { overflow-wrap: anywhere; }
