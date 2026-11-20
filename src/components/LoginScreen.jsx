@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "../styles/LoginScreen.css";
-import { signIn, signUp } from "../account";
+import { accountRequest, signIn, signUp } from "../account";
 
 import gsap from "gsap";
 
@@ -51,6 +51,23 @@ const LoginScreen = ({ onGuestLogin, authError = "" }) => {
   const [authMode, setAuthMode] = useState("login");
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [accountReady, setAccountReady] = useState(false);
+  const [checkingAccount, setCheckingAccount] = useState(true);
+
+  const checkAccountAvailability = async () => {
+    setCheckingAccount(true);
+    try {
+      await accountRequest("/status");
+      setAccountReady(true);
+      setError("");
+    } catch (error) {
+      setAccountReady(false);
+      setError(error.message);
+    } finally {
+      setCheckingAccount(false);
+    }
+  };
+  useEffect(() => { checkAccountAvailability(); }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -245,7 +262,7 @@ const LoginScreen = ({ onGuestLogin, authError = "" }) => {
 
   const handleEmailAuth = async (event) => {
     event.preventDefault();
-    if (authSubmitting) return;
+    if (authSubmitting || !accountReady) return;
     setError("");
     if (authMode === "signup" && password !== confirmPassword) {
       setError("Passwords do not match.");
@@ -310,19 +327,20 @@ const LoginScreen = ({ onGuestLogin, authError = "" }) => {
               <label htmlFor="confirmPasswordInput">Confirm password</label>
             </div>
           </>}
-          <button type="submit" className="login-btn" disabled={authSubmitting} aria-busy={authSubmitting}>
-            {authSubmitting ? "Please wait…" : authMode === "signup" ? "Create account" : "Sign in"}
+          <button type="submit" className="login-btn" disabled={authSubmitting || !accountReady} aria-busy={authSubmitting || checkingAccount}>
+            {checkingAccount ? "Checking availability…" : !accountReady ? "Sign-in unavailable" : authSubmitting ? "Please wait…" : authMode === "signup" ? "Create account" : "Sign in"}
           </button>
         </form>
+        {!accountReady && !checkingAccount && <button type="button" className="forgot-link" onClick={checkAccountAvailability}>Check again</button>}
 
         <button type="button" className="guest-btn" onClick={onGuestLogin} disabled={authSubmitting}>Continue as guest</button>
         <a
           href="#"
           className="signup-text"
-          aria-disabled={authSubmitting}
+          aria-disabled={authSubmitting || !accountReady}
           onClick={(event) => {
             event.preventDefault();
-            if (authSubmitting) return;
+            if (authSubmitting || !accountReady) return;
             setError("");
             setPassword("");
             setConfirmPassword("");
