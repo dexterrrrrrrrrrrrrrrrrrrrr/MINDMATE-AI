@@ -107,4 +107,4 @@ Clinical, Firebase, microphone, provider, and cross-browser acceptance require t
 - `docs/PRESENTATION_OUTLINE.md`: 12-slide presentation outline with speaker notes. PPTX export could not run because the presentation runtime is unavailable in this environment; this outline is not a PowerPoint file.
 - `docs/build_report.py`: report rebuild script, requiring Python, ReportLab and Windows Arial fonts.
 
-These documents distinguish implemented experimental signal observations from future predictive ML work. Retain the original MIT license and contributor attribution from MindMate.
+These documents distinguish implemented experimental signal observations from future predictive ML work. Original source notices are preserved in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

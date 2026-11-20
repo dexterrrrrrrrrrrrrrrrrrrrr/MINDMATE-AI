@@ -1,3 +1,7 @@
+# Third Party Notices
+
+Vital Sense includes code derived from [MINDMATE-AI](https://github.com/sagnikisopasfasf/MINDMATE-AI). The original copyright and permission notice is retained below for that code. Repository ownership and current maintenance are managed by ANURAG.
+
 MIT License
 
 Copyright (c) 2026 Sagnik Pal

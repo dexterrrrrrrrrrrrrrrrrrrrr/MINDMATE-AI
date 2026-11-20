@@ -1,102 +1,87 @@
-# 🧠 Vital Sense AI
+# Vital Sense
 
-Vital Sense AI is an AI-powered mental wellness and productivity companion offering emotional support, goal tracking, AI journaling, and voice interactions through a conversational interface. It integrates text and voice AI to provide realistic, context-aware responses.
+A conversational AI companion for reflection, everyday planning, and productivity, with text chat and natural voice replies powered by NVIDIA.
 
-## 🖥️ Deployment
+**Owner and maintainer:** [ANURAG](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr)
 
-- frontend deployed: <https://mindmate-ai-jade.vercel.app>
+[Open Vital Sense](https://mindmate-ai-anurag.vercel.app) · [Backend repository](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/MINDMATE_AI_API) · [API documentation](https://mindmate-ai-api-anurag.onrender.com/docs)
 
+## What you can do
 
-- backend deployed: <https://mindmate-ai-api.onrender.com>
+- Choose Therapy, Doctor, Work, or Personal mode to tailor the conversation.
+- Chat with NVIDIA Nemotron 3 Nano Omni.
+- Listen to replies through NVIDIA Magpie text to speech.
+- Use browser dictation and the animated voice conversation screen.
+- Explore mood check-ins, journaling, and goal-planning tools.
 
+The public app currently runs in guest mode. Chat conversations stay in the current session and are not saved to an account. Google sign-in and cloud chat storage are not enabled; saving goals requires a configured account. Guest journals and mood check-ins use browser storage.
 
-open api docs:
-- <https://mindmate-ai-api.onrender.com/docs>
+## Technology
 
- or
+| Layer | Tools |
+| --- | --- |
+| Interface | React 18, Vite 7, React Router |
+| Motion and visuals | Framer Motion, GSAP, Three.js |
+| Content | React Markdown, Lucide icons |
+| AI service | Vital Sense API, FastAPI, NVIDIA NIM and Riva |
+| Optional accounts | Firebase Authentication and Firestore |
+| Hosting | Vercel frontend and Render backend |
 
-- <https://mindmate-ai-api.onrender.com/scalar_docs>
+## Run locally
 
-## Github Repos
+Use Node.js 22.12 or newer.
 
-- frontend: <https://github.com/sagnikisopasfasf/MINDMATE-AI>
-- backend: <https://github.com/Sonic7002/MINDMATE_AI_API>
-
-## 🌟 Features
-
-- 💬 Conversational AI chat with context-aware emotional support
-
-- 🎯 Goal tracking and habit monitoring
-
-- 📓 AI-assisted journaling with sentiment insights
-
-- 🔊 Text-to-speech voice responses
-
-- 🔐 Google authentication and secure cloud storage
-
-## 🏗 Tech Stack
-
-- Frontend: React, Framer Motion, Lucide Icons, CSS / Glassmorphism UI
-- Backend: FastAPI, Python 3.11, NVIDIA NIM (Nemotron 3 Nano Omni 30B A3B), NVIDIA Magpie TTS
-- Cloud & Storage: Firebase Authentication, Firebase Firestore
-- Deployment: Vercel (frontend), Render (backend)
-
-## 🚀 Setup
-Frontend
 ```bash
-git clone https://github.com/yourusername/mindmate-ai.git
-cd mindmate-ai/frontend
-npm install
+git clone https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/MINDMATE-AI.git
+cd MINDMATE-AI
+npm ci
 cp .env.example .env
 npm run dev
 ```
-Backend
-```bash
-cd ../backend
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn main:app --reload
+
+Open [localhost:5173](http://127.0.0.1:5173). Start the backend separately using its [setup instructions](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/MINDMATE_AI_API#run-locally).
+
+### Configuration
+
+For local guest chat, set these values in `.env`:
+
+```dotenv
+VITE_API_URL=http://127.0.0.1:8000
+VITE_GUEST_ONLY=true
 ```
 
-Access backend API docs: http://localhost:8000/docs
+For a deployed frontend, set `VITE_API_URL` to your backend's HTTPS address. The backend must allow the frontend's origin through `ALLOWED_ORIGINS`.
 
-## Deployment configuration
+NVIDIA credentials belong on the backend. Never put an NVIDIA secret in a `VITE_` variable: frontend variables are included in browser code.
 
-Set `VITE_API_URL` to your own backend URL and `VITE_GUEST_ONLY=true` for guest chat.
-The app does not connect to Firebase when guest mode is enabled or Firebase configuration is incomplete.
-Guest chat stays in the current session; Google login and cloud chat saving are unavailable.
+### Optional Firebase accounts
 
-To enable accounts later, set your own `VITE_FIREBASE_*` configuration, set `VITE_GUEST_ONLY=false`, and configure your Firebase authorized domains and OAuth redirect before enabling sign-in.
+To enable accounts, provide your own `VITE_FIREBASE_*` values from `.env.example` and set `VITE_GUEST_ONLY=false`. Configure Firebase authorized domains and the authentication redirect for your deployed domain before enabling sign-in. Without complete Firebase configuration, the app stays in guest mode.
 
-## 📱 Usage
+## Build and deploy
 
-- Login with Google Authentication
+```bash
+npm run build
+npm run preview
+```
 
-- Chat with Vital Sense AI
+Vercel builds the repository root with `npm run build` and serves `dist`. The `VitalSense/` directory contains a separate health-awareness prototype; it is not the deployed frontend's build root.
 
-- Track goals and habits
+## Project structure
 
-- Use AI journaling for reflection
+```text
+src/App.jsx           Chat, navigation, guest and account state
+src/components/       Conversation, voice, journal, mood, and goals screens
+src/constants/        Assistant modes and voice options
+src/config.js         Backend endpoint configuration
+src/firebase.js       Optional account and cloud initialization
+src/styles/           Interface styling
+vercel.json           Static hosting and route configuration
+VitalSense/           Separate health-awareness prototype
+```
 
-- Listen to voice responses
+## Project ownership
 
-## 📄 License
+Vital Sense is owned and maintained in ANURAG's GitHub account. This repository contains the frontend; the companion repository contains the NVIDIA-powered API. Original third-party notices are preserved in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-**MIT License**
-
-## 👨‍💻 Author
-
-**Srijan Kargupta** – Backend & AI
-
-
-**Sagnik Pal** – Frontend, UI & Cloud
-
-## ❤️ Acknowledgements
-
-NVIDIA NIM & Riva
-
-Firebase
-
-React Community
+Vital Sense offers general support and information. It does not diagnose conditions or replace professional care.
