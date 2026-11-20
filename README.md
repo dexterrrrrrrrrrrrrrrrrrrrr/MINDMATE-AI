@@ -62,25 +62,13 @@ uvicorn main:app --reload
 
 Access backend API docs: http://localhost:8000/docs
 
-## Vercel authentication deployment
+## Deployment configuration
 
-Google sign-in uses Firebase redirect authentication with a same-origin helper proxy. Keep the Vercel project root at this repository root so the root `vercel.json` is applied.
+Set `VITE_API_URL` to your own backend URL and `VITE_GUEST_ONLY=true` for guest chat.
+The app does not connect to Firebase when guest mode is enabled or Firebase configuration is incomplete.
+Guest chat stays in the current session; Google login and cloud chat saving are unavailable.
 
-Set these production values in Vercel:
-
-```text
-VITE_APP_DOMAIN=mindmate-ai-jade.vercel.app
-VITE_FIREBASE_AUTH_DOMAIN=mind-mate-94675.firebaseapp.com
-```
-
-Firebase Authentication must list `mindmate-ai-jade.vercel.app` as an authorized domain. The Google OAuth client must include this exact redirect URI:
-
-```text
-https://mindmate-ai-jade.vercel.app/__/auth/handler
-```
-
-After deployment, both `/__/auth/handler` and `/__/auth/iframe` on the Vercel domain should return HTTP 200 before testing Google sign-in.
-
+To enable accounts later, set your own `VITE_FIREBASE_*` configuration, set `VITE_GUEST_ONLY=false`, and configure your Firebase authorized domains and OAuth redirect before enabling sign-in.
 
 ## 📱 Usage
 

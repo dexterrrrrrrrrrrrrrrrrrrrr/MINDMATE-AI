@@ -9,32 +9,27 @@ import {
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-const firebaseHostingAuthDomain =
-  import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() || "mind-mate-94675.firebaseapp.com";
-const productionAppDomain =
-  import.meta.env.VITE_APP_DOMAIN?.trim() || "mindmate-ai-jade.vercel.app";
+const firebaseHostingAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim();
+const productionAppDomain = import.meta.env.VITE_APP_DOMAIN?.trim();
 const currentHostname = typeof window === "undefined" ? "" : window.location.hostname;
-
-// Redirect auth must use the same stable production origin as the app. Random
-// Vercel preview domains cannot be safely used as OAuth redirect domains.
 const authDomain = currentHostname === productionAppDomain
   ? productionAppDomain
   : firebaseHostingAuthDomain;
-
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDqFZo4GDMxM4AERs5PQD2NEeGukyLMPxA",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.trim(),
   authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mind-mate-94675",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mind-mate-94675.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1029632166505",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1029632166505:web:4d5409368adf6d66def0f8",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-1XCEPRHZR9",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim(),
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim(),
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim(),
+  appId: import.meta.env.VITE_FIREBASE_APP_ID?.trim(),
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID?.trim(),
 };
 
-const app = initializeApp(firebaseConfig);
-
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const firebaseEnabled = import.meta.env.VITE_GUEST_ONLY !== "true"
+  && Boolean(firebaseConfig.apiKey && authDomain && firebaseConfig.projectId && firebaseConfig.appId);
+const app = firebaseEnabled ? initializeApp(firebaseConfig) : null;
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
 
 export const provider = new GoogleAuthProvider();
 provider.addScope("profile");

@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useState, useEffect, useRef, useMemo, startTrans
 import { FaArrowDown } from "react-icons/fa";
 import {
   auth,
+  firebaseEnabled,
   authRedirectDomain,
   prepareAuthSession,
   provider,
@@ -143,13 +144,13 @@ function App() {
   // User & UI state
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
-  const [authResolved, setAuthResolved] = useState(false);
+  const [authResolved, setAuthResolved] = useState(!firebaseEnabled);
   const [authSubmitting, setAuthSubmitting] = useState(
-    () => sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === "true"
+    () => firebaseEnabled && sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === "true"
   );
   const [authError, setAuthError] = useState("");
   const [isGuest, setIsGuest] = useState(
-    () => localStorage.getItem("isGuest") === "true"
+    () => !firebaseEnabled || localStorage.getItem("isGuest") === "true"
   );
   const [input, setInput] = useState("");
   const [assistantModeId, setAssistantModeId] = useState(
@@ -503,6 +504,7 @@ function App() {
 
   useEffect(() => {
     if (
+      firebaseEnabled &&
       !user &&
       isGuest &&
       guestMessageCount >= 5 &&
@@ -596,6 +598,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!firebaseEnabled) return undefined;
     let active = true;
     let authStateReady = false;
     let redirectReady = false;
@@ -1236,6 +1239,7 @@ function App() {
   // Login/logout handlers
   // Login button
   const handleGoogleLogin = async () => {
+    if (!firebaseEnabled) return;
     if (authSubmitting) return;
 
     const previousLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -1451,6 +1455,7 @@ function App() {
                 onLogout={handleSignOut}
                 goToPremium={goToPremium}
                 onOpenSettings={() => setSettingsOpen(true)}
+                loginEnabled={firebaseEnabled}
                 onLoginClick={() => navigate("/login")}
                 onToggleSidebar={() => setSidebarOpen((open) => !open)}
                 modeSwitcher={(
@@ -2037,14 +2042,14 @@ function App() {
       <Route path="/premium" element={<Premium user={user} />} />
       <Route
         path="/login"
-        element={
+        element={firebaseEnabled ? (
           <LoginScreen
             onGoogleLogin={handleGoogleLogin}
             onGuestLogin={handleGuestLogin}
             googleSubmitting={authSubmitting}
             authError={authError}
           />
-        }
+        ) : <Navigate to="/" replace />}
       />
 
       <Route

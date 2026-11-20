@@ -1,5 +1,5 @@
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
-const apiOrigin = (configuredApiUrl || "https://mindmate-ai-api.onrender.com").replace(/\/+$/, "");
+const apiOrigin = (configuredApiUrl || "http://127.0.0.1:8000").replace(/\/+$/, "");
 const apiBase = apiOrigin.endsWith("/api/v1") ? apiOrigin : `${apiOrigin}/api/v1`;
 
 export const AI_API_URL = `${apiBase}/`;

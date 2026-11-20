@@ -111,7 +111,7 @@ const GoalsPage = ({ assistantModeId = "therapy" }) => {
     const [dailyQuote, setDailyQuote] = useState("");
 
     const removeGoal = async (goalId) => {
-        const user = auth.currentUser;
+        const user = auth?.currentUser;
         if (!user) return;
 
         try {
@@ -157,9 +157,9 @@ const GoalsPage = ({ assistantModeId = "therapy" }) => {
             return;
         }
 
-        const user = auth.currentUser;
+        const user = auth?.currentUser;
         if (!user) {
-            alert("Please login to save goals.");
+            alert("Saving goals is unavailable in guest mode.");
             return;
         }
 
@@ -188,6 +188,7 @@ const GoalsPage = ({ assistantModeId = "therapy" }) => {
 
     // Load user goals
     useEffect(() => {
+        if (!auth) return undefined;
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userGoalsRef = collection(db, "users", user.uid, "goals");
@@ -463,7 +464,7 @@ ${challenge ? `Suggested challenge: ${challenge}` : ""}`;
                                         const updatedGoals = goals.map(g => g.id === goal.id ? updatedGoal : g);
                                         setGoals(updatedGoals);
                                         try {
-                                            const user = auth.currentUser;
+                                            const user = auth?.currentUser;
                                             const goalRef = doc(db, "users", user.uid, "goals", goal.id);
                                             await updateDoc(goalRef, {
                                                 progress: updatedGoal.progress,

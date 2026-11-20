@@ -152,7 +152,7 @@ export default function SettingsModal({
       const savedTheme = localStorage.getItem("theme");
       if (savedTheme && activeRequest) setTheme(savedTheme);
 
-      const currentUser = auth.currentUser;
+      const currentUser = auth?.currentUser;
       if (!currentUser) return;
 
       try {
@@ -178,7 +178,7 @@ export default function SettingsModal({
     setTheme(nextTheme);
     localStorage.setItem("theme", nextTheme);
 
-    const currentUser = auth.currentUser;
+    const currentUser = auth?.currentUser;
     if (!currentUser) return;
 
     try {
@@ -189,7 +189,7 @@ export default function SettingsModal({
   };
 
   const handleDeleteAccount = () => {
-    const currentUser = auth.currentUser;
+    const currentUser = auth?.currentUser;
     setErrorMessage("");
 
     if (!currentUser) {
@@ -221,7 +221,7 @@ export default function SettingsModal({
   };
 
   const confirmDeleteOAuth = async () => {
-    const currentUser = auth.currentUser;
+    const currentUser = auth?.currentUser;
     if (!currentUser || deletePending) return;
 
     setDeletePending(true);
@@ -246,7 +246,7 @@ export default function SettingsModal({
   };
 
   const confirmDeletePassword = async () => {
-    const currentUser = auth.currentUser;
+    const currentUser = auth?.currentUser;
     if (!currentUser || !password.trim() || deletePending) return;
 
     setDeletePending(true);
@@ -300,7 +300,7 @@ export default function SettingsModal({
 
   if (!isOpen && !closing) return null;
 
-  const currentUser = auth.currentUser;
+  const currentUser = auth?.currentUser;
   const accountName = currentUser?.displayName || (currentUser ? "Vital Sense account" : "Guest session");
   const accountDetail = currentUser?.email || "Your conversations are stored on this device only.";
   const accountInitial = (currentUser?.displayName || currentUser?.email || "G").trim().charAt(0).toUpperCase();

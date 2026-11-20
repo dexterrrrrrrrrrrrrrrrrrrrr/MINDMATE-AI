@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 
 const Topbar = ({
   user,
+  loginEnabled = true,
   onLogout,
   goToPremium,
   onOpenSettings,
@@ -144,6 +145,8 @@ const Topbar = ({
             </div>
           )}
           </div>
+        ) : !loginEnabled ? (
+          <span title="Chats stay in this session">Guest chat · not saved</span>
         ) : (
           <div className="guest-buttons">
             <button
