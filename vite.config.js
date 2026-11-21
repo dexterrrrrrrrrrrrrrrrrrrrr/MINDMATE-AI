@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const sitesStaticWorker = () => ({
-  name: 'mindmate-sites-static-worker',
+  name: 'vital-sense-sites-static-worker',
   apply: 'build',
   async closeBundle() {
     const serverDirectory = resolve('dist/server');

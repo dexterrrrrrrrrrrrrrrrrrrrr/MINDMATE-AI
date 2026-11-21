@@ -4,7 +4,7 @@ A conversational AI companion for reflection, everyday planning, and productivit
 
 **Owner and maintainer:** [ANURAG](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr)
 
-[Open Vital Sense](https://mindmate-ai-anurag.vercel.app) · [Backend repository](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/MINDMATE_AI_API) · [API documentation](https://mindmate-ai-api-anurag.onrender.com/docs)
+[Open Vital Sense](https://vital-sense-anurag.vercel.app) · [Backend repository](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/vital-sense-api) · [API documentation](https://mindmate-ai-api-anurag.onrender.com/docs)
 
 ## What you can do
 
@@ -32,14 +32,14 @@ Email/password accounts use the companion API and MongoDB. Signed-in users can s
 Use Node.js 22.12 or newer.
 
 ```bash
-git clone https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/MINDMATE-AI.git
-cd MINDMATE-AI
+git clone https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/vital-sense.git
+cd vital-sense
 npm ci
 cp .env.example .env
 npm run dev
 ```
 
-Open [localhost:5173](http://127.0.0.1:5173). Start the backend separately using its [setup instructions](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/MINDMATE_AI_API#run-locally).
+Open [localhost:5173](http://127.0.0.1:5173). Start the backend separately using its [setup instructions](https://github.com/dexterrrrrrrrrrrrrrrrrrrrr/vital-sense-api#run-locally).
 
 ### Configuration
 
